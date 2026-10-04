@@ -63,15 +63,20 @@ export default function MainGridSection({ onOpenPreview }) {
           "bg-cyan-50 text-cyan-600 border-cyan-200",
           "bg-indigo-50 text-indigo-600 border-indigo-200"
         ];
+        const displayName = (ex.shortName && ex.shortName.trim().toUpperCase() !== 'EXAM')
+          ? ex.shortName.trim()
+          : (ex.title || ex.name || `Exam ${idx + 1}`);
+
         return {
-          name: ex.shortName || ex.title || ex.name,
+          id: ex.id || `live-exam-${idx}`,
+          name: displayName,
           count: `${ex.stats?.totalMaterials || 0} Materials`,
           bg: colors[idx % colors.length],
           icon: ex.icon || "🏛️",
           slug: ex.slug
         };
       })
-    : defaultPopularExams;
+    : defaultPopularExams.map((ex, idx) => ({ ...ex, id: `default-exam-${idx}` }));
 
   const bestSellerBooks = [
     {
@@ -180,9 +185,9 @@ export default function MainGridSection({ onOpenPreview }) {
 
                 {/* 4x2 Grid of Exam Badges on mobile/tablet */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-2 gap-2.5 sm:gap-3">
-                  {popularExams.map((exam) => (
+                  {popularExams.map((exam, idx) => (
                     <Link
-                      key={exam.name}
+                      key={exam.id || exam.slug || `${exam.name}-${idx}`}
                       href={exam.slug ? `/exams/${exam.slug}` : "/exams"}
                       className="p-2.5 sm:p-3 rounded-xl border border-slate-100 hover:border-slate-300 hover:shadow-xs bg-slate-50/60 hover:bg-white transition-all flex flex-col items-center text-center cursor-pointer group"
                     >

@@ -178,8 +178,8 @@ export default function Footer() {
                 Contact Us
               </h4>
               <div className="text-[11px] text-slate-400 space-y-1">
-                <p>📞 +91 1234567890</p>
-                <p>✉️ support@rajexamvault.in</p>
+                <p>📞 +91 9929580615</p>
+                <p>✉️ rajexamvault@gmail.com</p>
                 <p>🕒 Mon - Sat: 9AM - 7PM</p>
               </div>
             </div>

@@ -16,6 +16,19 @@ const CATEGORIES = [
 
 const EMOJI_ICONS = ["🏛️", "👮", "👨‍🏫", "📚", "⚖️", "🗺️", "📋", "🎓", "🚜", "🌲", "🩺", "💼"];
 
+const SUBJECT_PRESETS = [
+  "Rajasthan History, Art & Culture",
+  "Rajasthan Geography",
+  "Rajasthan Polity & Admin",
+  "Economy of Rajasthan",
+  "General Science & Technology",
+  "Reasoning & Mental Ability",
+  "Basic Mathematics",
+  "General Hindi (सामान्य हिन्दी)",
+  "General English",
+  "Current Affairs & GK"
+];
+
 export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusForExam, showToast }) {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +43,9 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
+  // Dynamic Subjects Input State
+  const [subjectInput, setSubjectInput] = useState("");
+
   const [formData, setFormData] = useState({
     title: "",
     slug: "",
@@ -41,7 +57,8 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
     totalVacancies: "",
     examDate: "",
     syllabusUrl: "",
-    status: "active"
+    status: "active",
+    subjects: ["Rajasthan History, Art & Culture", "Rajasthan Geography", "General Science & Technology"]
   });
 
   const fetchExams = useCallback(async () => {
@@ -71,6 +88,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
 
   const handleOpenCreate = () => {
     setEditingExam(null);
+    setSubjectInput("");
     setFormData({
       title: "",
       slug: "",
@@ -82,13 +100,20 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
       totalVacancies: "",
       examDate: "",
       syllabusUrl: "",
-      status: "active"
+      status: "active",
+      subjects: ["Rajasthan History, Art & Culture", "Rajasthan Geography", "General Science & Technology"]
     });
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (exam) => {
+  const handleOpenEdit = async (exam) => {
     setEditingExam(exam);
+    setSubjectInput("");
+    let initialSubjects = [];
+    if (Array.isArray(exam.subjects) && exam.subjects.length > 0) {
+      initialSubjects = exam.subjects.map(s => (typeof s === "string" ? s : s.name));
+    }
+
     setFormData({
       title: exam.title || "",
       slug: exam.slug || "",
@@ -100,9 +125,26 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
       totalVacancies: exam.totalVacancies || "",
       examDate: exam.examDate || "",
       syllabusUrl: exam.syllabusUrl || "",
-      status: exam.status || "active"
+      status: exam.status || "active",
+      subjects: initialSubjects
     });
+
     setIsModalOpen(true);
+
+    // Fetch subjects dynamically if not already populated on exam object
+    if (initialSubjects.length === 0 && exam.id) {
+      try {
+        const subs = await examService.getExamSubjects(exam.id);
+        if (Array.isArray(subs) && subs.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            subjects: subs.map(s => (typeof s === "string" ? s : s.name))
+          }));
+        }
+      } catch (e) {
+        console.warn("Could not load exam subjects:", e);
+      }
+    }
   };
 
   const handleTitleChange = (val) => {
@@ -118,10 +160,42 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
     });
   };
 
+  // Add subject from preset button
+  const handleAddPresetSubject = (preset) => {
+    if (!formData.subjects.includes(preset)) {
+      setFormData(prev => ({ ...prev, subjects: [...prev.subjects, preset] }));
+    }
+  };
+
+  // Add custom typed subject
+  const handleAddCustomSubject = () => {
+    const trimmed = subjectInput.trim();
+    if (!trimmed) return;
+    if (formData.subjects.includes(trimmed)) {
+      showToast?.("warning", `Subject "${trimmed}" is already in the list`);
+      return;
+    }
+    setFormData(prev => ({ ...prev, subjects: [...prev.subjects, trimmed] }));
+    setSubjectInput("");
+  };
+
+  // Remove subject
+  const handleRemoveSubject = (indexToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      subjects: prev.subjects.filter((_, idx) => idx !== indexToRemove)
+    }));
+  };
+
   const handleSaveExam = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
       showToast?.("error", "Exam title is required");
+      return;
+    }
+
+    if (!formData.subjects || formData.subjects.length === 0) {
+      showToast?.("error", "At least one subject is mandatory for this exam. Please add subjects.");
       return;
     }
 
@@ -132,7 +206,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
         showToast?.("success", `Exam "${formData.title}" updated successfully! ✏️`);
       } else {
         await examService.createExam(formData);
-        showToast?.("success", `Exam "${formData.title}" created successfully! 🎯`);
+        showToast?.("success", `Exam "${formData.title}" created with ${formData.subjects.length} subjects! 🎯`);
       }
       setIsModalOpen(false);
       fetchExams();
@@ -164,7 +238,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
             <span>Rajasthan Exams Management</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Create and organize state government exams to provide PYQs, Notes, and Study Material.
+            Create state exams with mandatory dynamic subjects to drive Question Banks, PYQs, and Test Series.
           </p>
         </div>
 
@@ -237,7 +311,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
           <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
             {search || categoryFilter !== "all"
               ? "No exams match your search filters. Try clearing your filters."
-              : "Get started by creating your first Rajasthan government exam!"}
+              : "Get started by creating your first Rajasthan government exam with dynamic subjects!"}
           </p>
           <button
             onClick={handleOpenCreate}
@@ -311,7 +385,31 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                   )}
                 </div>
 
-                {/* Stats Counters: PYQs, Notes, Syllabus */}
+                {/* Configured Subjects Badges */}
+                {Array.isArray(exam.subjects) && exam.subjects.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-slate-800/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      📚 Subjects ({exam.subjects.length})
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {exam.subjects.slice(0, 3).map((sub, sIdx) => (
+                        <span
+                          key={sIdx}
+                          className="px-2 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800 text-[10px] truncate max-w-[140px]"
+                        >
+                          {typeof sub === "string" ? sub : sub.name}
+                        </span>
+                      ))}
+                      {exam.subjects.length > 3 && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">
+                          +{exam.subjects.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats Counters: PYQs, Notes, Questions */}
                 <div className="grid grid-cols-3 gap-2 mt-4 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/70 text-center">
                   <div>
                     <div className="text-xs font-black text-amber-400">
@@ -327,9 +425,9 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                   </div>
                   <div>
                     <div className="text-xs font-black text-emerald-400">
-                      {exam.stats?.freeCount || 0}
+                      {exam.stats?.questionCount || 0}
                     </div>
-                    <div className="text-[10px] font-semibold text-slate-400">Free PDFs</div>
+                    <div className="text-[10px] font-semibold text-slate-400">Questions</div>
                   </div>
                 </div>
               </div>
@@ -361,7 +459,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                     type="button"
                     onClick={() => handleOpenEdit(exam)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Edit Exam details"
+                    title="Edit Exam details & subjects"
                   >
                     ✏️
                   </button>
@@ -410,10 +508,10 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                 <span className="text-xl">{editingExam ? "✏️" : "🏛️"}</span>
                 <div>
                   <h3 className="text-sm font-black text-white">
-                    {editingExam ? "Edit Rajasthan Exam" : "Create New Rajasthan Exam"}
+                    {editingExam ? "Edit Rajasthan Exam & Subjects" : "Create New Rajasthan Exam"}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Add syllabus, categories, and target vacancy details
+                    Define exam info and mandatory dynamic subjects for question banks.
                   </p>
                 </div>
               </div>
@@ -440,6 +538,100 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                   onChange={(e) => handleTitleChange(e.target.value)}
                   className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-red-500"
                 />
+              </div>
+
+              {/* MANDATORY DYNAMIC SUBJECTS SECTION */}
+              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-200 uppercase flex items-center gap-1.5">
+                    <span>📚 Exam Subjects</span>
+                    <span className="text-red-400">*</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-300 font-bold border border-red-800/50">
+                      MANDATORY
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {formData.subjects.length} added {formData.subjects.length === 0 && <span className="text-red-400 font-bold">(Min 1 required)</span>}
+                  </span>
+                </div>
+
+                {/* Added Subjects Pill List */}
+                {formData.subjects.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+                    {formData.subjects.map((sub, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-lg bg-red-950/50 text-red-200 border border-red-800/50 text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+                      >
+                        <span>📖 {sub}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSubject(idx)}
+                          className="text-red-400 hover:text-white cursor-pointer font-bold px-0.5"
+                          title="Remove subject"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-amber-400 bg-amber-950/30 border border-amber-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>Subjects are mandatory for this exam. Please select presets below or type custom subjects.</span>
+                  </div>
+                )}
+
+                {/* Input to type custom subject */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Type custom subject name (e.g. Mathematics, Indian Polity)..."
+                    value={subjectInput}
+                    onChange={(e) => setSubjectInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomSubject();
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-red-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomSubject}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    + Add Subject
+                  </button>
+                </div>
+
+                {/* Quick Add Presets */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Quick Presets:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUBJECT_PRESETS.map((preset) => {
+                      const isAdded = formData.subjects.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          disabled={isAdded}
+                          onClick={() => handleAddPresetSubject(preset)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
+                            isAdded
+                              ? "bg-slate-900 text-slate-600 border border-slate-800/50 cursor-not-allowed"
+                              : "bg-slate-900/90 text-slate-300 border border-slate-800 hover:border-red-500/50 hover:text-white"
+                          }`}
+                        >
+                          + {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Slug & Icon Row */}

@@ -33,6 +33,25 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, isAuthLoading, user, router]);
 
+  // Restore fields if credentials were submitted via browser query params, and clean URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const emailParam = params.get("email");
+        const passwordParam = params.get("password");
+        if (emailParam || passwordParam) {
+          setFormData((prev) => ({
+            ...prev,
+            email: emailParam ? decodeURIComponent(emailParam) : prev.email,
+            password: passwordParam ? decodeURIComponent(passwordParam) : prev.password,
+          }));
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+      } catch (_) {}
+    }
+  }, []);
+
   // Unverified account handling
   const [needsVerification, setNeedsVerification] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -64,7 +83,7 @@ export default function LoginPage() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setServerError("");
     setServerSuccess("");
 
@@ -233,7 +252,7 @@ export default function LoginPage() {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form method="POST" action="#" onSubmit={handleSubmit} className="space-y-3">
             {/* Email */}
             <div>
               <div
@@ -416,7 +435,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleVerifyOtp} className="space-y-4 my-auto">
+          <form method="POST" action="#" onSubmit={handleVerifyOtp} className="space-y-4 my-auto">
             <div className="flex justify-center gap-2">
               {otp.map((digit, index) => (
                 <input

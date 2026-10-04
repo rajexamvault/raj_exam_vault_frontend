@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import questionService from "@/services/questionService";
 import examService from "@/services/examService";
-import syllabusService from "@/services/syllabusService";
 
 const DEFAULT_OPTIONS = [
   { id: "A", textHindi: "", textEnglish: "", isCorrect: true },
@@ -15,17 +14,22 @@ const DEFAULT_OPTIONS = [
 export default function QuestionBankManagement({ showToast }) {
   const [questions, setQuestions] = useState([]);
   const [exams, setExams] = useState([]);
-  const [examStages, setExamStages] = useState([]);
-  const [stageSubjects, setStageSubjects] = useState([]);
+  const [modalSubjects, setModalSubjects] = useState([]);
+  const [filterSubjects, setFilterSubjects] = useState([]);
   const [stats, setStats] = useState({ totalQuestions: 0, easyCount: 0, mediumCount: 0, hardCount: 0, pyqCount: 0 });
   const [loading, setLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState("");
   const [examFilter, setExamFilter] = useState("all");
+  const [subjectFilter, setSubjectFilter] = useState("all");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [pyqFilter, setPyqFilter] = useState("all");
   const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0 });
+
+  // Bulk Selection & Deletion State
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,11 +40,24 @@ export default function QuestionBankManagement({ showToast }) {
   const [bulkJsonText, setBulkJsonText] = useState("");
   const [expandedExplanations, setExpandedExplanations] = useState({});
 
+  // Bulk / JSON File Upload States
+  const [bulkExamId, setBulkExamId] = useState("");
+  const [bulkSubjectId, setBulkSubjectId] = useState("");
+  const [bulkExamSubjects, setBulkExamSubjects] = useState([]);
+  const [bulkImportMode, setBulkImportMode] = useState("file"); // "file" | "paste"
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [selectedFileSize, setSelectedFileSize] = useState("");
+  const [parsedBulkQuestions, setParsedBulkQuestions] = useState([]);
+  const [bulkParseError, setBulkParseError] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Question Form State
   const [formData, setFormData] = useState({
     examId: "",
-    stageId: "",
     subjectId: "",
+    stageId: "",
     topicId: "",
     questionType: "single_choice",
     questionHindi: "",
@@ -66,9 +83,6 @@ export default function QuestionBankManagement({ showToast }) {
         const examsList = res.data?.exams || res.exams || (Array.isArray(res.data) ? res.data : []);
         if (examsList.length > 0) {
           setExams(examsList);
-          if (!formData.examId) {
-            setFormData(prev => ({ ...prev, examId: examsList[0].id }));
-          }
         }
       } catch (err) {
         console.warn("Exams load error:", err);
@@ -76,6 +90,25 @@ export default function QuestionBankManagement({ showToast }) {
     };
     fetchExams();
   }, []);
+
+  // Update filter subjects when examFilter changes
+  useEffect(() => {
+    const loadFilterSubjects = async () => {
+      if (examFilter === "all" || !examFilter) {
+        setFilterSubjects([]);
+        setSubjectFilter("all");
+        return;
+      }
+      try {
+        const subs = await examService.getExamSubjects(examFilter);
+        setFilterSubjects(subs || []);
+        setSubjectFilter("all");
+      } catch (err) {
+        console.warn("Filter subjects error:", err);
+      }
+    };
+    loadFilterSubjects();
+  }, [examFilter]);
 
   // Fetch Questions & Stats
   const fetchQuestions = useCallback(async () => {
@@ -87,6 +120,7 @@ export default function QuestionBankManagement({ showToast }) {
           limit: 10,
           search,
           examId: examFilter,
+          subjectId: subjectFilter,
           difficultyLevel: difficultyFilter,
           isPreviousYear: pyqFilter
         }),
@@ -100,56 +134,48 @@ export default function QuestionBankManagement({ showToast }) {
       if (sRes.data?.stats) {
         setStats(sRes.data.stats);
       }
+      // Reset selected checkboxes if page/filters change
+      setSelectedIds([]);
     } catch (err) {
       showToast?.("error", err.message || "Failed to load questions");
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, difficultyFilter, pyqFilter]);
+  }, [pagination.currentPage, search, examFilter, subjectFilter, difficultyFilter, pyqFilter]);
 
   useEffect(() => {
     fetchQuestions();
   }, [fetchQuestions]);
 
-  // Handle Exam change in modal to cascade stages
+  // Handle Exam change in modal to dynamically cascade subjects
   const handleModalExamChange = async (targetExamId) => {
-    setFormData(prev => ({ ...prev, examId: targetExamId, stageId: "", subjectId: "" }));
+    setFormData(prev => ({ ...prev, examId: targetExamId, subjectId: "" }));
     if (!targetExamId) {
-      setExamStages([]);
-      setStageSubjects([]);
+      setModalSubjects([]);
       return;
     }
     try {
-      const res = await syllabusService.getStages(targetExamId);
-      if (res.data) setExamStages(res.data);
+      const subs = await examService.getExamSubjects(targetExamId);
+      const subjectsList = subs || [];
+      setModalSubjects(subjectsList);
+      if (subjectsList.length > 0) {
+        setFormData(prev => ({ ...prev, subjectId: subjectsList[0].id }));
+      }
     } catch (err) {
-      console.warn("Failed to load stages:", err);
-    }
-  };
-
-  // Handle Stage change to cascade subjects
-  const handleModalStageChange = async (targetStageId) => {
-    setFormData(prev => ({ ...prev, stageId: targetStageId, subjectId: "" }));
-    if (!targetStageId) {
-      setStageSubjects([]);
-      return;
-    }
-    try {
-      const res = await syllabusService.getSubjects(targetStageId);
-      if (res.data) setStageSubjects(res.data);
-    } catch (err) {
-      console.warn("Failed to load subjects:", err);
+      console.warn("Failed to load modal subjects:", err);
+      setModalSubjects([]);
     }
   };
 
   // Open Create Modal
-  const handleOpenCreate = () => {
-    const defaultExamId = exams[0]?.id || "";
+  const handleOpenCreate = async () => {
+    const defaultExamId = (examFilter && examFilter !== "all") ? examFilter : (exams[0]?.id || "");
+    const defaultSubjectId = (subjectFilter && subjectFilter !== "all") ? subjectFilter : "";
     setEditingQuestion(null);
     setFormData({
       examId: defaultExamId,
+      subjectId: defaultSubjectId,
       stageId: "",
-      subjectId: "",
       topicId: "",
       questionType: "single_choice",
       questionHindi: "",
@@ -171,7 +197,22 @@ export default function QuestionBankManagement({ showToast }) {
       pyqExamName: "",
       status: "active"
     });
-    if (defaultExamId) handleModalExamChange(defaultExamId);
+
+    if (defaultExamId) {
+      try {
+        const subs = await examService.getExamSubjects(defaultExamId);
+        setModalSubjects(subs || []);
+        if (subs && subs.length > 0) {
+          const matchSub = defaultSubjectId ? subs.find(s => String(s.id) === String(defaultSubjectId)) : null;
+          setFormData(prev => ({ ...prev, subjectId: matchSub ? matchSub.id : subs[0].id }));
+        }
+      } catch (err) {
+        console.warn("Failed to load subjects:", err);
+      }
+    } else {
+      setModalSubjects([]);
+    }
+
     setIsModalOpen(true);
   };
 
@@ -180,8 +221,8 @@ export default function QuestionBankManagement({ showToast }) {
     setEditingQuestion(q);
     setFormData({
       examId: q.examId || "",
-      stageId: q.stageId || "",
       subjectId: q.subjectId || "",
+      stageId: q.stageId || "",
       topicId: q.topicId || "",
       questionType: q.questionType || "single_choice",
       questionHindi: q.questionHindi || "",
@@ -201,16 +242,13 @@ export default function QuestionBankManagement({ showToast }) {
 
     if (q.examId) {
       try {
-        const res = await syllabusService.getStages(q.examId);
-        if (res.data) setExamStages(res.data);
-        if (q.stageId) {
-          const subRes = await syllabusService.getSubjects(q.stageId);
-          if (subRes.data) setStageSubjects(subRes.data);
-        }
+        const subs = await examService.getExamSubjects(q.examId);
+        setModalSubjects(subs || []);
       } catch (err) {
-        console.warn("Preload error:", err);
+        console.warn("Failed to load subjects for edit:", err);
       }
     }
+
     setIsModalOpen(true);
   };
 
@@ -233,6 +271,16 @@ export default function QuestionBankManagement({ showToast }) {
   // Save Question
   const handleSaveQuestion = async (e) => {
     e.preventDefault();
+    if (!formData.examId) {
+      showToast?.("error", "Please select a Target Exam for this question");
+      return;
+    }
+
+    if (!formData.subjectId) {
+      showToast?.("error", "Subject is mandatory! Please select a Subject for this question.");
+      return;
+    }
+
     if (!formData.questionHindi && !formData.questionEnglish) {
       showToast?.("error", "Please write question text in either Hindi or English");
       return;
@@ -256,29 +304,200 @@ export default function QuestionBankManagement({ showToast }) {
     }
   };
 
-  // Handle Bulk Import
+  // Open Bulk Import / JSON File Upload Modal
+  const handleOpenBulkModal = async () => {
+    const targetExam = (examFilter && examFilter !== "all") ? examFilter : (exams[0]?.id || "");
+    setBulkExamId(targetExam);
+    setBulkImportMode("file");
+    setSelectedFileName("");
+    setSelectedFileSize("");
+    setParsedBulkQuestions([]);
+    setBulkJsonText("");
+    setBulkParseError(null);
+    setShowPreview(false);
+
+    if (targetExam) {
+      try {
+        const subs = await examService.getExamSubjects(targetExam);
+        setBulkExamSubjects(subs || []);
+        if (subs && subs.length > 0) {
+          const matchSub = (subjectFilter && subjectFilter !== "all")
+            ? subs.find(s => String(s.id) === String(subjectFilter))
+            : subs[0];
+          setBulkSubjectId(matchSub ? matchSub.id : subs[0].id);
+        } else {
+          setBulkSubjectId("");
+        }
+      } catch (err) {
+        console.warn("Bulk modal subject load error:", err);
+        setBulkExamSubjects([]);
+        setBulkSubjectId("");
+      }
+    } else {
+      setBulkExamSubjects([]);
+      setBulkSubjectId("");
+    }
+
+    setIsBulkModalOpen(true);
+  };
+
+  // Cascading Subject Selection when Exam changes in Bulk Modal
+  const handleBulkExamChange = async (targetExamId) => {
+    setBulkExamId(targetExamId);
+    setBulkSubjectId("");
+    if (!targetExamId) {
+      setBulkExamSubjects([]);
+      return;
+    }
+    try {
+      const subs = await examService.getExamSubjects(targetExamId);
+      setBulkExamSubjects(subs || []);
+      if (subs && subs.length > 0) {
+        setBulkSubjectId(subs[0].id);
+      }
+    } catch (err) {
+      console.warn("Bulk modal exam change error:", err);
+      setBulkExamSubjects([]);
+    }
+  };
+
+  // Helper to safely extract questions array from various JSON formats
+  const parseQuestionsData = (data) => {
+    let list = data;
+    if (!Array.isArray(data)) {
+      if (data && Array.isArray(data.questions)) {
+        list = data.questions;
+      } else if (data && Array.isArray(data.data)) {
+        list = data.data;
+      } else {
+        throw new Error("JSON must contain an array of question objects (e.g. [{ question: '...', options: [...] }])");
+      }
+    }
+    if (list.length === 0) {
+      throw new Error("The JSON file contains 0 questions. Please provide a non-empty question list.");
+    }
+    return list;
+  };
+
+  // Handle .json File Selection / Drag-and-drop
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") {
+      setBulkParseError("Please select a valid .json file");
+      return;
+    }
+    setSelectedFileName(file.name);
+    setSelectedFileSize(`${(file.size / 1024).toFixed(1)} KB`);
+    setBulkParseError(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        const questionsList = parseQuestionsData(parsed);
+        setParsedBulkQuestions(questionsList);
+        setBulkParseError(null);
+      } catch (err) {
+        setBulkParseError("Failed to parse JSON file: " + err.message);
+        setParsedBulkQuestions([]);
+      }
+    };
+    reader.onerror = () => {
+      setBulkParseError("Failed to read the file from disk.");
+      setParsedBulkQuestions([]);
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle pasted JSON text
+  const handlePasteChange = (text) => {
+    setBulkJsonText(text);
+    if (!text.trim()) {
+      setParsedBulkQuestions([]);
+      setBulkParseError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      const questionsList = parseQuestionsData(parsed);
+      setParsedBulkQuestions(questionsList);
+      setBulkParseError(null);
+    } catch (err) {
+      setBulkParseError("Invalid JSON syntax: " + err.message);
+      setParsedBulkQuestions([]);
+    }
+  };
+
+  // Load a rich sample JSON into paste tab
+  const handleLoadSampleJson = () => {
+    const sample = [
+      {
+        question: "डॉ. राजेंद्र प्रसाद के कार्यभार संभालने से पहले संविधान सभा के अस्थायी सभापति कौन थे?",
+        options: [
+          "सी. राजगोपालाचारी",
+          "डॉ. बी. आर. अम्बेडकर",
+          "टी. टी. कृष्णमाचारी",
+          "डॉ. सच्चिदानंद सिन्हा"
+        ],
+        answer: "D",
+        exam: "Civil Services (Pre.)",
+        year: 2024,
+        type: "pyq",
+        explanation: "डॉ. सच्चिदानंद सिन्हा को 9 दिसंबर 1946 को संविधान सभा का अंतरिम अध्यक्ष चुना गया था।"
+      },
+      {
+        questionHindi: "राजस्थान का राज्य वृक्ष कौनसा है?",
+        questionEnglish: "Which is the state tree of Rajasthan?",
+        options: [
+          { id: "A", textHindi: "खेजड़ी", textEnglish: "Khejri (Prosopis cineraria)", isCorrect: true },
+          { id: "B", textHindi: "रोहिड़ा", textEnglish: "Rohida", isCorrect: false },
+          { id: "C", textHindi: "नीम", textEnglish: "Neem", isCorrect: false },
+          { id: "D", textHindi: "बरगद", textEnglish: "Banyan", isCorrect: false }
+        ],
+        correctAnswer: "A",
+        difficultyLevel: "easy",
+        marks: 2.0
+      }
+    ];
+    setBulkImportMode("paste");
+    handlePasteChange(JSON.stringify(sample, null, 2));
+  };
+
+  // Submit Bulk Import
   const handleBulkImportSubmit = async (e) => {
     e.preventDefault();
+    if (!bulkExamId) {
+      showToast?.("error", "Please select a Target Exam for these questions");
+      return;
+    }
+    if (!bulkSubjectId) {
+      showToast?.("error", "Subject is mandatory! Please select a Subject of the Exam.");
+      return;
+    }
+    if (!parsedBulkQuestions || parsedBulkQuestions.length === 0) {
+      showToast?.("error", "Please upload a valid JSON file or paste question data first");
+      return;
+    }
+
     try {
-      const parsed = JSON.parse(bulkJsonText);
-      if (!Array.isArray(parsed)) {
-        showToast?.("error", "JSON must be an array of question objects");
-        return;
-      }
       setIsSaving(true);
-      const res = await questionService.bulkImport(parsed, exams[0]?.id);
-      showToast?.("success", res.message || "Questions imported successfully!");
+      const res = await questionService.bulkImport(parsedBulkQuestions, bulkExamId, bulkSubjectId);
+      showToast?.("success", res.message || `Successfully imported ${parsedBulkQuestions.length} questions into Question Bank! 🎯`);
       setIsBulkModalOpen(false);
-      setBulkJsonText("");
+
+      // Divide & switch view directly to this Exam & Subject so user sees results instantly
+      setExamFilter(bulkExamId);
+      setSubjectFilter(bulkSubjectId);
+      setPagination(prev => ({ ...prev, currentPage: 1 }));
       fetchQuestions();
     } catch (err) {
-      showToast?.("error", "Invalid JSON format: " + err.message);
+      showToast?.("error", err.message || "Failed to import questions");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Delete Question
+  // Single Question Deletion
   const handleDeleteQuestion = async (id) => {
     try {
       await questionService.deleteQuestion(id);
@@ -288,6 +507,41 @@ export default function QuestionBankManagement({ showToast }) {
     } catch (err) {
       showToast?.("error", err.message || "Failed to delete question");
     }
+  };
+
+  // Bulk Question Deletion
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete all ${selectedIds.length} selected questions?`)) {
+      return;
+    }
+    try {
+      setIsBulkDeleting(true);
+      const res = await questionService.bulkDeleteQuestions(selectedIds);
+      showToast?.("success", res.message || `Deleted ${selectedIds.length} questions 🗑️`);
+      setSelectedIds([]);
+      fetchQuestions();
+    } catch (err) {
+      showToast?.("error", err.message || "Failed to delete selected questions");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Select / Deselect All
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === questions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(questions.map(q => q.id));
+    }
+  };
+
+  // Toggle single question selection
+  const handleToggleSelectQuestion = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
   };
 
   const toggleExplanation = (id) => {
@@ -302,19 +556,29 @@ export default function QuestionBankManagement({ showToast }) {
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <span>🎯</span>
-              <span>Question Bank & Rich MCQ Engine</span>
+              <span>Question Bank & Dynamic MCQ Engine</span>
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Bilingual (Hindi & English) repository for Rajasthan exams, previous year questions, and test series.
+              Organized strictly by Exam → Mandatory Subject with single & bulk question deletion.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5">
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer animate-fade-in"
+              >
+                <span>🗑️ Delete Selected ({selectedIds.length})</span>
+              </button>
+            )}
             <button
-              onClick={() => setIsBulkModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+              onClick={handleOpenBulkModal}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer flex items-center gap-1.5"
             >
-              📥 Bulk JSON Import
+              <span>📁</span>
+              <span>Upload JSON / Bulk Import</span>
             </button>
             <button
               onClick={handleOpenCreate}
@@ -350,111 +614,278 @@ export default function QuestionBankManagement({ showToast }) {
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search keywords in Hindi / English..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-          />
-          <span className="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+      {/* EXAM DIVISION SWITCHER BAR */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-md space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">🏛️</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              Divide According to Exam:
+            </span>
+            {examFilter !== "all" && (
+              <button
+                onClick={() => { setExamFilter("all"); setSubjectFilter("all"); }}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold underline cursor-pointer ml-1"
+              >
+                (View All Exams)
+              </button>
+            )}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            {examFilter === "all"
+              ? `Total ${stats.totalQuestions} questions across all Rajasthan exams`
+              : `Divided under: ${exams.find(e => String(e.id) === String(examFilter))?.title || 'Selected Exam'}`}
+          </div>
         </div>
 
+        {/* Horizontal Exam Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            onClick={() => { setExamFilter("all"); setSubjectFilter("all"); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              examFilter === "all"
+                ? "bg-linear-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50 ring-2 ring-emerald-400/40"
+                : "bg-slate-950/70 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700"
+            }`}
+          >
+            <span>🌐</span>
+            <span>All Exams</span>
+            <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-900/80 text-[10px] font-mono">
+              {stats.totalQuestions}
+            </span>
+          </button>
+
+          {exams.map((ex) => {
+            const isSelected = String(examFilter) === String(ex.id);
+            const examCount = stats.examBreakdown?.find(b => String(b.examId) === String(ex.id))?.count;
+            return (
+              <button
+                key={ex.id}
+                onClick={() => { setExamFilter(ex.id); setSubjectFilter("all"); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-950/50 ring-2 ring-emerald-400/40"
+                    : "bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <span>{ex.icon || "🏛️"}</span>
+                <span>{ex.shortName || ex.title}</span>
+                {examCount !== undefined && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    isSelected ? "bg-emerald-900/80 text-emerald-200" : "bg-slate-900 text-slate-400"
+                  }`}>
+                    {examCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* If a specific exam is chosen, display that exam's subject pills */}
+        {examFilter !== "all" && filterSubjects.length > 0 && (
+          <div className="pt-2.5 border-t border-slate-800/80 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <span className="text-[11px] font-bold text-slate-400 uppercase shrink-0">
+              📚 Subjects of Exam:
+            </span>
+            <button
+              onClick={() => setSubjectFilter("all")}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition shrink-0 cursor-pointer ${
+                subjectFilter === "all"
+                  ? "bg-teal-600 text-white"
+                  : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+              }`}
+            >
+              All Subjects
+            </button>
+            {filterSubjects.map((sub) => {
+              const isSubSelected = String(subjectFilter) === String(sub.id);
+              return (
+                <button
+                  key={sub.id}
+                  onClick={() => setSubjectFilter(sub.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition shrink-0 cursor-pointer flex items-center gap-1 ${
+                    isSubSelected
+                      ? "bg-teal-600 text-white shadow-xs"
+                      : "bg-slate-950 text-slate-300 hover:text-white border border-slate-800"
+                  }`}
+                >
+                  <span>{sub.icon || "📖"}</span>
+                  <span>{sub.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* FILTER BAR: Exam -> Subject hierarchy & search */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1 w-full">
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔍</span>
+          <input
+            type="text"
+            placeholder="Search questions by text, PYQ details, or explanation..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-500 outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        {/* Filter by Exam */}
         <select
           value={examFilter}
           onChange={(e) => setExamFilter(e.target.value)}
-          className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-44 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
-          <option value="all">All Rajasthan Exams</option>
+          <option value="all">🏛️ All Exams</option>
           {exams.map((ex) => (
-            <option key={ex.id} value={ex.id}>{ex.title}</option>
+            <option key={ex.id} value={ex.id}>
+              {ex.title}
+            </option>
           ))}
         </select>
 
+        {/* Filter by Subject (dynamically populated when exam is selected) */}
+        <select
+          value={subjectFilter}
+          onChange={(e) => setSubjectFilter(e.target.value)}
+          className="w-full md:w-48 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
+        >
+          <option value="all">📚 All Subjects</option>
+          {filterSubjects.map((sub) => (
+            <option key={sub.id} value={sub.id}>
+              {sub.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Difficulty Filter */}
         <select
           value={difficultyFilter}
           onChange={(e) => setDifficultyFilter(e.target.value)}
-          className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-32 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
-          <option value="all">All Difficulty Levels</option>
-          <option value="easy">Easy Level</option>
-          <option value="medium">Medium Level</option>
-          <option value="hard">Hard Level</option>
+          <option value="all">All Levels</option>
+          <option value="easy">🟢 Easy</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="hard">🔴 Hard</option>
         </select>
 
+        {/* PYQ Filter */}
         <select
           value={pyqFilter}
           onChange={(e) => setPyqFilter(e.target.value)}
-          className="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-32 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
-          <option value="all">All Questions (PYQs & Practice)</option>
+          <option value="all">All Questions</option>
           <option value="true">📑 PYQs Only</option>
-          <option value="false">🎯 Practice Questions Only</option>
         </select>
       </div>
 
-      {/* Questions Feed */}
+      {/* Bulk Selection Header */}
+      {questions.length > 0 && (
+        <div className="flex items-center justify-between px-2 text-xs text-slate-400">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={selectedIds.length === questions.length && questions.length > 0}
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-700 cursor-pointer"
+            />
+            <span className="font-semibold text-slate-300">
+              Select All on this page ({selectedIds.length}/{questions.length} selected)
+            </span>
+          </label>
+
+          {selectedIds.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="text-red-400 hover:text-red-300 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <span>🗑️ Delete {selectedIds.length} Selected Questions</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* QUESTION CARDS LIST */}
       {loading ? (
         <div className="p-16 flex flex-col items-center justify-center gap-3">
-          <div className="w-9 h-9 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-xs text-slate-400 font-medium">Loading questions...</span>
+          <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs text-slate-400">Loading questions from vault...</span>
         </div>
       ) : questions.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-slate-900/30 border border-slate-800">
+        <div className="p-12 text-center rounded-2xl bg-slate-900/40 border border-slate-800">
           <span className="text-4xl">🎯</span>
           <h3 className="text-sm font-bold text-white mt-3">No Questions Found</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-            {search || examFilter !== "all"
-              ? "No questions match your current filter parameters."
-              : "Get started by adding questions or importing your MCQ question bank."}
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            {search || examFilter !== "all" || subjectFilter !== "all"
+              ? "No questions match your current filters. Try resetting filters."
+              : "Start by selecting an exam and subject to add your first bilingual MCQ question!"}
           </p>
           <button
             onClick={handleOpenCreate}
-            className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+            className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
           >
             + Add First Question
           </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {questions.map((q, idx) => {
-            const isExplanationExpanded = expandedExplanations[q.id];
+          {questions.map((q) => {
             const options = Array.isArray(q.options) ? q.options : [];
+            const isExplanationExpanded = !!expandedExplanations[q.id];
+            const isSelected = selectedIds.includes(q.id);
 
             return (
               <div
                 key={q.id}
-                className="bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 transition-all shadow-md space-y-3"
+                className={`bg-slate-900/70 border rounded-2xl p-5 space-y-4 transition-all ${
+                  isSelected
+                    ? "border-emerald-500/80 bg-slate-900/90 shadow-md shadow-emerald-950/40"
+                    : "border-slate-800/80 hover:border-slate-700"
+                }`}
               >
-                {/* Question Top Tags */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-xs font-mono font-bold">
-                      Q{(pagination.currentPage - 1) * 10 + idx + 1}
+                {/* Top Strip: Selection, Exam, Subject, Difficulty, Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-800/60">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelectQuestion(q.id)}
+                      className="w-4 h-4 rounded text-emerald-600 bg-slate-900 border-slate-700 cursor-pointer"
+                      title="Select question for deletion"
+                    />
+
+                    {/* Exam Badge */}
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold flex items-center gap-1">
+                      <span>{q.exam?.icon || "🏛️"}</span>
+                      <span>{q.exam?.title || "Exam"}</span>
                     </span>
-                    <span className="px-2 py-0.5 rounded-md bg-blue-950 text-blue-300 border border-blue-800/40 text-[10px] font-bold">
-                      {q.exam?.shortName || q.exam?.title || "Exam"}
+
+                    {/* Subject Badge */}
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-950/60 text-blue-300 border border-blue-800/50 text-[10px] font-bold flex items-center gap-1">
+                      <span>📚</span>
+                      <span>{q.subjectRef?.name || q.subject?.name || "General Subject"}</span>
                     </span>
-                    {q.stage && (
-                      <span className="px-2 py-0.5 rounded-md bg-purple-950 text-purple-300 border border-purple-800/40 text-[10px] font-bold">
-                        {q.stage.name}
-                      </span>
-                    )}
-                    {q.subjectRef && (
-                      <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[10px] font-medium">
-                        {q.subjectRef.name}
-                      </span>
-                    )}
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      q.difficultyLevel === "hard" ? "bg-rose-950 text-rose-300 border border-rose-800/40" :
-                      q.difficultyLevel === "medium" ? "bg-amber-950 text-amber-300 border border-amber-800/40" :
-                      "bg-emerald-950 text-emerald-300 border border-emerald-800/40"
-                    }`}>
+
+                    {/* Difficulty Badge */}
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        q.difficultyLevel === "hard"
+                          ? "bg-rose-950 text-rose-300 border border-rose-800/40"
+                          : q.difficultyLevel === "medium"
+                          ? "bg-amber-950 text-amber-300 border border-amber-800/40"
+                          : "bg-emerald-950 text-emerald-300 border border-emerald-800/40"
+                      }`}
+                    >
                       {q.difficultyLevel}
                     </span>
+
+                    {/* PYQ Badge */}
                     {q.isPreviousYear && (
                       <span className="px-2 py-0.5 rounded-full bg-purple-900/80 text-purple-200 border border-purple-700/50 text-[10px] font-bold">
                         PYQ {q.pyqYear ? `(${q.pyqYear})` : ""} {q.pyqExamName ? `• ${q.pyqExamName}` : ""}
@@ -462,36 +893,39 @@ export default function QuestionBankManagement({ showToast }) {
                     )}
                   </div>
 
+                  {/* Single Question Actions (Edit & Delete Function) */}
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleOpenEdit(q)}
                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition cursor-pointer"
                       title="Edit Question"
                     >
-                      ✏️
+                      ✏️ Edit
                     </button>
+
                     {deleteConfirmId === q.id ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 animate-fade-in">
                         <button
                           onClick={() => handleDeleteQuestion(q.id)}
-                          className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold"
+                          className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
                         >
-                          Delete
+                          Confirm Delete
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(null)}
-                          className="px-1.5 py-1 rounded bg-slate-800 text-slate-400 text-[10px]"
+                          className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-[11px] cursor-pointer"
                         >
-                          ✕
+                          Cancel
                         </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => setDeleteConfirmId(q.id)}
-                        className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/30 text-xs transition cursor-pointer"
+                        className="px-2 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-semibold transition cursor-pointer flex items-center gap-1"
                         title="Delete Question"
                       >
-                        🗑️
+                        <span>🗑️</span>
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>
@@ -512,7 +946,7 @@ export default function QuestionBankManagement({ showToast }) {
                 </div>
 
                 {/* Options Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   {options.map((opt) => {
                     const isCorrect = opt.id === q.correctAnswer;
                     return (
@@ -524,9 +958,11 @@ export default function QuestionBankManagement({ showToast }) {
                             : "bg-slate-950/50 border-slate-800/80 text-slate-300"
                         }`}
                       >
-                        <span className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-[11px] shrink-0 ${
-                          isCorrect ? "bg-emerald-500 text-slate-950 font-black" : "bg-slate-800 text-slate-400"
-                        }`}>
+                        <span
+                          className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-[11px] shrink-0 ${
+                            isCorrect ? "bg-emerald-500 text-slate-950 font-black" : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
                           {opt.id}
                         </span>
                         <div>
@@ -540,7 +976,7 @@ export default function QuestionBankManagement({ showToast }) {
 
                 {/* Solution / Explanation Toggle */}
                 {(q.explanationHindi || q.explanationEnglish) && (
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <button
                       onClick={() => toggleExplanation(q.id)}
                       className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
@@ -573,10 +1009,10 @@ export default function QuestionBankManagement({ showToast }) {
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  {editingQuestion ? "Edit Question" : "Add New MCQ Question"}
+                  {editingQuestion ? "Edit MCQ Question" : "Add New MCQ to Question Bank"}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Bilingual question creator with dynamic options and rich explanations.
+                  Questions are linked to an Exam and a Mandatory Subject.
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white text-lg p-1">
@@ -585,47 +1021,47 @@ export default function QuestionBankManagement({ showToast }) {
             </div>
 
             <form onSubmit={handleSaveQuestion} className="space-y-4">
-              {/* Exam, Stage & Subject Selectors */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Exam & Subject Selectors (Strict Exam -> Subject hierarchy) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+                {/* Exam Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Target Exam *</label>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                    Target Exam *
+                  </label>
                   <select
                     required
                     value={formData.examId}
                     onChange={(e) => handleModalExamChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="">Select Exam</option>
                     {exams.map((ex) => (
-                      <option key={ex.id} value={ex.id}>{ex.title}</option>
+                      <option key={ex.id} value={ex.id}>
+                        {ex.title}
+                      </option>
                     ))}
                   </select>
                 </div>
 
+                {/* Subject Dropdown (Mandatory!) */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Stage (Optional)</label>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1 flex items-center justify-between">
+                    <span>Target Subject *</span>
+                    <span className="text-[10px] text-red-400 font-bold uppercase">Mandatory</span>
+                  </label>
                   <select
-                    value={formData.stageId}
-                    onChange={(e) => handleModalStageChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500"
-                  >
-                    <option value="">All Stages</option>
-                    {examStages.map((st) => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Subject (Optional)</label>
-                  <select
+                    required
                     value={formData.subjectId}
                     onChange={(e) => setFormData(prev => ({ ...prev, subjectId: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
                   >
-                    <option value="">General Subject</option>
-                    {stageSubjects.map((sub) => (
-                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                    <option value="">
+                      {modalSubjects.length === 0 ? "⚠️ No Subjects (Please add in Exam first)" : "Select Subject"}
+                    </option>
+                    {modalSubjects.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        📖 {sub.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -662,7 +1098,7 @@ export default function QuestionBankManagement({ showToast }) {
               {/* Options Form with Correct Answer Radio */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-300 uppercase">
-                  Options & Select Correct Answer (🔘 Correct)
+                  Options & Select Correct Answer (🔘 Radio button = Correct Answer)
                 </label>
                 <div className="space-y-2">
                   {formData.options.map((opt, idx) => (
@@ -749,7 +1185,7 @@ export default function QuestionBankManagement({ showToast }) {
                     className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
                   />
                   <label htmlFor="pyqCheckbox" className="text-xs font-semibold text-slate-300 cursor-pointer">
-                    Is Official Previous Year Question (PYQ)?
+                    Official PYQ Question?
                   </label>
                 </div>
 
@@ -772,16 +1208,16 @@ export default function QuestionBankManagement({ showToast }) {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-pointer"
                 >
-                  {isSaving ? "Saving..." : editingQuestion ? "Update Question" : "Save Question"}
+                  {isSaving ? "Saving Question..." : editingQuestion ? "Update Question" : "Save Question"}
                 </button>
               </div>
             </form>
@@ -789,56 +1225,309 @@ export default function QuestionBankManagement({ showToast }) {
         </div>
       )}
 
-      {/* BULK IMPORT MODAL */}
+      {/* BULK / JSON FILE UPLOAD MODAL - Divided by Exam & Subject */}
       {isBulkModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl space-y-5 my-8">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white">📥 Bulk Import Questions (JSON)</h3>
-              <button onClick={() => setIsBulkModalOpen(false)} className="text-slate-400 hover:text-white text-lg">✕</button>
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>📥</span>
+                  <span>Upload Questions from JSON File</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Select Exam ➔ Select Subject of Exam ➔ Upload JSON file to divide and store questions.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsBulkModalOpen(false)}
+                className="text-slate-400 hover:text-white text-lg p-1 cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Paste a JSON array of question objects. Example format:
-            </p>
-            <pre className="p-3 bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 rounded-xl max-h-32 overflow-y-auto">
-{`[
-  {
-    "questionHindi": "राजस्थान का राज्य पशु क्या है?",
-    "questionEnglish": "What is the state animal of Rajasthan?",
-    "options": [
-      { "id": "A", "textHindi": "चिंकारा / ऊंट", "textEnglish": "Chinkara / Camel" },
-      { "id": "B", "textHindi": "बाघ", "textEnglish": "Tiger" }
-    ],
-    "correctAnswer": "A",
-    "difficultyLevel": "easy"
-  }
-]`}
-            </pre>
-
             <form onSubmit={handleBulkImportSubmit} className="space-y-4">
-              <textarea
-                rows={8}
-                required
-                placeholder="Paste JSON array here..."
-                value={bulkJsonText}
-                onChange={(e) => setBulkJsonText(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono rounded-xl p-3 outline-none focus:border-emerald-500"
-              />
-              <div className="flex justify-end gap-3">
+              {/* STEP 1: Select Exam and Subject of Exam */}
+              <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3">
+                <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🎯</span>
+                  <span>Step 1: Select Exam & Subject of Exam (Mandatory Division)</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Select Exam */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                      1. Target Exam *
+                    </label>
+                    <select
+                      required
+                      value={bulkExamId}
+                      onChange={(e) => handleBulkExamChange(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">-- Choose Exam --</option>
+                      {exams.map((ex) => (
+                        <option key={ex.id} value={ex.id}>
+                          {ex.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Select Subject of Exam */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase mb-1 flex items-center justify-between">
+                      <span>2. Subject of Exam *</span>
+                      <span className="text-[10px] text-red-400 font-bold uppercase">Required</span>
+                    </label>
+                    <select
+                      required
+                      value={bulkSubjectId}
+                      onChange={(e) => setBulkSubjectId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">
+                        {bulkExamSubjects.length === 0
+                          ? (bulkExamId ? "Loading subjects..." : "Select Exam First")
+                          : "-- Select Subject of Exam --"}
+                      </option>
+                      {bulkExamSubjects.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Division Notice Badge */}
+                {bulkExamId && bulkSubjectId && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/40 text-xs text-emerald-300 flex items-center gap-2">
+                    <span>📌</span>
+                    <span>
+                      Questions will be divided under:{" "}
+                      <strong>{exams.find(e => String(e.id) === String(bulkExamId))?.title}</strong>
+                      {" ➔ "}
+                      <strong>{bulkExamSubjects.find(s => String(s.id) === String(bulkSubjectId))?.name}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* STEP 2: Upload Method Toggle & File Input */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkImportMode("file")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5 ${
+                        bulkImportMode === "file"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-800 text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      <span>📁</span>
+                      <span>Upload JSON File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkImportMode("paste")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5 ${
+                        bulkImportMode === "paste"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-800 text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      <span>📝</span>
+                      <span>Paste JSON Text</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLoadSampleJson}
+                    className="text-[11px] font-semibold text-teal-400 hover:text-teal-300 underline cursor-pointer"
+                  >
+                    📄 Load Sample JSON Template
+                  </button>
+                </div>
+
+                {/* MODE A: Upload JSON File */}
+                {bulkImportMode === "file" && (
+                  <div>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".json,application/json"
+                      onChange={(e) => handleFileSelect(e.target.files?.[0])}
+                      className="hidden"
+                    />
+
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                      onDragLeave={() => setIsDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragOver(false);
+                        handleFileSelect(e.dataTransfer.files?.[0]);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                        isDragOver
+                          ? "border-emerald-400 bg-emerald-950/20"
+                          : selectedFileName
+                          ? "border-emerald-700 bg-slate-950/60"
+                          : "border-slate-700 hover:border-emerald-500/70 bg-slate-950/40 hover:bg-slate-950/80"
+                      }`}
+                    >
+                      {selectedFileName ? (
+                        <div className="space-y-2">
+                          <span className="text-3xl">📄</span>
+                          <div className="text-xs font-bold text-white">{selectedFileName}</div>
+                          <div className="text-[11px] text-slate-400">
+                            Size: {selectedFileSize} • Click or drag another file to replace
+                          </div>
+                          {parsedBulkQuestions.length > 0 && (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-900/60 text-emerald-300 text-xs font-bold border border-emerald-700/60">
+                              <span>✅</span>
+                              <span>{parsedBulkQuestions.length} Questions successfully detected & parsed!</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <span className="text-3xl">☁️</span>
+                          <div className="text-xs font-bold text-white">
+                            Click to browse JSON file or drag & drop here
+                          </div>
+                          <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                            Upload your Rajasthan competitive exam question bank (.json). Supports bilingual questions, PYQs, and standard question sets.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* MODE B: Paste JSON Text */}
+                {bulkImportMode === "paste" && (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={7}
+                      placeholder="Paste your JSON array here (e.g. [{ question: '...', options: [...] }])..."
+                      value={bulkJsonText}
+                      onChange={(e) => handlePasteChange(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono rounded-xl p-3 outline-none focus:border-emerald-500"
+                    />
+                    {parsedBulkQuestions.length > 0 && (
+                      <div className="text-xs text-emerald-400 font-semibold">
+                        ✅ Recognized {parsedBulkQuestions.length} questions in pasted JSON.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Parse Error Display */}
+                {bulkParseError && (
+                  <div className="p-3 bg-red-950/50 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>{bulkParseError}</span>
+                  </div>
+                )}
+
+                {/* PREVIEW OF PARSED QUESTIONS */}
+                {parsedBulkQuestions.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-300">
+                        📋 Preview Questions ({parsedBulkQuestions.length} Total Detected)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPreview(!showPreview)}
+                        className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                      >
+                        {showPreview ? "Hide Preview ▲" : "Show Preview ▼"}
+                      </button>
+                    </div>
+
+                    {showPreview && (
+                      <div className="space-y-2 pt-2 max-h-56 overflow-y-auto pr-1 text-xs">
+                        {parsedBulkQuestions.slice(0, 3).map((q, idx) => {
+                          const qText = q.question || q.questionHindi || q.questionEnglish || `Question #${idx + 1}`;
+                          const qAns = q.correctAnswer || q.answer || "A";
+                          const opts = Array.isArray(q.options) ? q.options : [];
+                          return (
+                            <div key={idx} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+                              <div className="font-semibold text-white flex items-center justify-between">
+                                <span className="line-clamp-2">#{idx + 1}. {qText}</span>
+                                <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono text-[10px] border border-emerald-800">
+                                  Ans: {qAns}
+                                </span>
+                              </div>
+                              {opts.length > 0 && (
+                                <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-400">
+                                  {opts.map((opt, oIdx) => {
+                                    const optText = typeof opt === "string" ? opt : (opt.textHindi || opt.textEnglish || opt.text || "");
+                                    const optId = typeof opt === "string" ? String.fromCharCode(65 + oIdx) : (opt.id || String.fromCharCode(65 + oIdx));
+                                    const isCorrect = String(optId).toUpperCase() === String(qAns).toUpperCase();
+                                    return (
+                                      <div key={oIdx} className={`p-1 rounded ${isCorrect ? "bg-emerald-950/60 text-emerald-200 font-bold" : ""}`}>
+                                        {optId}. {optText}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {parsedBulkQuestions.length > 3 && (
+                          <div className="text-center text-[11px] text-slate-500 italic">
+                            ...and {parsedBulkQuestions.length - 3} more questions ready to import.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsBulkModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md"
+                  disabled={isSaving || !bulkExamId || !bulkSubjectId || parsedBulkQuestions.length === 0}
+                  className={`px-5 py-2 rounded-xl text-white font-bold text-xs shadow-md transition flex items-center gap-1.5 ${
+                    isSaving || !bulkExamId || !bulkSubjectId || parsedBulkQuestions.length === 0
+                      ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                      : "bg-emerald-600 hover:bg-emerald-500 cursor-pointer shadow-emerald-900/30"
+                  }`}
                 >
-                  {isSaving ? "Importing..." : "Import Questions"}
+                  {isSaving ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Importing Questions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀</span>
+                      <span>
+                        Import {parsedBulkQuestions.length > 0 ? `${parsedBulkQuestions.length} ` : ""}Questions to Exam & Subject
+                      </span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

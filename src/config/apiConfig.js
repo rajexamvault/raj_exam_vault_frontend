@@ -1,5 +1,6 @@
-const rawUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
-export const API_BASE_URL = rawUrl.endsWith('/api') ? rawUrl : `${rawUrl}/api`;
+import API_BASE_URL from '@/lib/api';
+
+export { API_BASE_URL };
 
 export const API_ENDPOINTS = {
   auth: {

@@ -25,16 +25,16 @@ export default function AuthFooter() {
             <span className="text-slate-900 font-bold text-xs">Need Help?</span>
           </div>
           <a
-            href="mailto:support@rajexamvault.in"
+            href="mailto:rajexamvault@gmail.com"
             className="text-slate-600 hover:text-blue-600 transition-colors"
           >
-            support@rajexamvault.in
+            rajexamvault@gmail.com
           </a>
           <a
-            href="tel:+911234567890"
+            href="tel:+919929580615"
             className="text-slate-800 font-medium hover:text-blue-600 transition-colors"
           >
-            +91 12345 67890
+            +91 99295 80615
           </a>
         </div>
 

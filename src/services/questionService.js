@@ -77,10 +77,16 @@ export const questionService = {
       body: JSON.stringify(questionData)
     }),
 
-  bulkImport: (questions, defaultExamId) =>
+  bulkImport: (questions, defaultExamId, defaultSubjectId) =>
     request("/questions/bulk-import", {
       method: "POST",
-      body: JSON.stringify({ questions, defaultExamId })
+      body: JSON.stringify({
+        questions,
+        defaultExamId,
+        defaultSubjectId,
+        examId: defaultExamId,
+        subjectId: defaultSubjectId
+      })
     }),
 
   updateQuestion: (id, questionData) =>
@@ -92,6 +98,12 @@ export const questionService = {
   deleteQuestion: (id) =>
     request(`/questions/${id}`, {
       method: "DELETE"
+    }),
+
+  bulkDeleteQuestions: (questionIds) =>
+    request("/questions/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ questionIds })
     })
 };
 

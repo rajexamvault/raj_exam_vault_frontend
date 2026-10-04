@@ -121,9 +121,9 @@ export default function HeroSection() {
               </div>
 
               <div className="space-y-1.5">
-                {quickExams.map((exam) => (
+                {quickExams.map((exam, idx) => (
                   <Link
-                    key={exam.name}
+                    key={exam.slug ? `${exam.slug}-${idx}` : `${exam.name}-${idx}`}
                     href={exam.slug ? `/exams/${exam.slug}` : "/exams"}
                     className="p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 flex items-center justify-between transition-all group/item"
                   >

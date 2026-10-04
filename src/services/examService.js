@@ -83,6 +83,15 @@ export const examService = {
       method: "DELETE"
     }),
 
+  getExamSubjects: (examId) =>
+    request(`/exams/${examId}/subjects`).then(res => res.data?.subjects || res.subjects || []),
+
+  addExamSubject: (examId, subjectData) =>
+    request(`/exams/${examId}/subjects`, {
+      method: "POST",
+      body: JSON.stringify(subjectData)
+    }),
+
   // Study Materials & PYQs
   getMaterials: (params = {}) => {
     const query = new URLSearchParams();
