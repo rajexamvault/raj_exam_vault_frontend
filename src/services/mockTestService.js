@@ -49,6 +49,7 @@ export const mockTestService = {
     if (params.examId && params.examId !== "all") query.append("examId", params.examId);
     if (params.stageId && params.stageId !== "all") query.append("stageId", params.stageId);
     if (params.subjectId && params.subjectId !== "all") query.append("subjectId", params.subjectId);
+    if (params.topicId && params.topicId !== "all") query.append("topicId", params.topicId);
     if (params.testType && params.testType !== "all") query.append("testType", params.testType);
     if (params.status && params.status !== "all") query.append("status", params.status);
     if (params.isFree !== undefined && params.isFree !== "all") query.append("isFree", params.isFree);

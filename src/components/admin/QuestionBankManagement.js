@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import questionService from "@/services/questionService";
 import examService from "@/services/examService";
+import syllabusService from "@/services/syllabusService";
 
 const DEFAULT_OPTIONS = [
   { id: "A", textHindi: "", textEnglish: "", isCorrect: true },
@@ -15,7 +16,9 @@ export default function QuestionBankManagement({ showToast }) {
   const [questions, setQuestions] = useState([]);
   const [exams, setExams] = useState([]);
   const [modalSubjects, setModalSubjects] = useState([]);
+  const [modalTopics, setModalTopics] = useState([]);
   const [filterSubjects, setFilterSubjects] = useState([]);
+  const [filterTopics, setFilterTopics] = useState([]);
   const [stats, setStats] = useState({ totalQuestions: 0, easyCount: 0, mediumCount: 0, hardCount: 0, pyqCount: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -23,6 +26,7 @@ export default function QuestionBankManagement({ showToast }) {
   const [search, setSearch] = useState("");
   const [examFilter, setExamFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const [topicFilter, setTopicFilter] = useState("all");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [pyqFilter, setPyqFilter] = useState("all");
   const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalItems: 0 });
@@ -43,7 +47,9 @@ export default function QuestionBankManagement({ showToast }) {
   // Bulk / JSON File Upload States
   const [bulkExamId, setBulkExamId] = useState("");
   const [bulkSubjectId, setBulkSubjectId] = useState("");
+  const [bulkTopicId, setBulkTopicId] = useState("");
   const [bulkExamSubjects, setBulkExamSubjects] = useState([]);
+  const [bulkTopics, setBulkTopics] = useState([]);
   const [bulkImportMode, setBulkImportMode] = useState("file"); // "file" | "paste"
   const [selectedFileName, setSelectedFileName] = useState("");
   const [selectedFileSize, setSelectedFileSize] = useState("");
@@ -52,6 +58,9 @@ export default function QuestionBankManagement({ showToast }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef(null);
+  const [isCustomTopicMode, setIsCustomTopicMode] = useState(false);
+  const [isBulkCustomTopicMode, setIsBulkCustomTopicMode] = useState(false);
+  const [bulkCustomTopicName, setBulkCustomTopicName] = useState("");
 
   // Question Form State
   const [formData, setFormData] = useState({
@@ -59,6 +68,7 @@ export default function QuestionBankManagement({ showToast }) {
     subjectId: "",
     stageId: "",
     topicId: "",
+    customTopicName: "",
     questionType: "single_choice",
     questionHindi: "",
     questionEnglish: "",
@@ -97,18 +107,44 @@ export default function QuestionBankManagement({ showToast }) {
       if (examFilter === "all" || !examFilter) {
         setFilterSubjects([]);
         setSubjectFilter("all");
+        setFilterTopics([]);
+        setTopicFilter("all");
         return;
       }
       try {
         const subs = await examService.getExamSubjects(examFilter);
         setFilterSubjects(subs || []);
         setSubjectFilter("all");
+        setFilterTopics([]);
+        setTopicFilter("all");
       } catch (err) {
         console.warn("Filter subjects error:", err);
       }
     };
     loadFilterSubjects();
   }, [examFilter]);
+
+  // Update filter topics when subjectFilter changes
+  useEffect(() => {
+    const loadFilterTopics = async () => {
+      if (subjectFilter === "all" || !subjectFilter) {
+        setFilterTopics([]);
+        setTopicFilter("all");
+        return;
+      }
+      try {
+        const res = await syllabusService.getTopics(subjectFilter);
+        const topicsList = res.data?.topics || res.data || res.topics || [];
+        setFilterTopics(topicsList || []);
+        setTopicFilter("all");
+      } catch (err) {
+        console.warn("Filter topics error:", err);
+        setFilterTopics([]);
+        setTopicFilter("all");
+      }
+    };
+    loadFilterTopics();
+  }, [subjectFilter]);
 
   // Fetch Questions & Stats
   const fetchQuestions = useCallback(async () => {
@@ -121,6 +157,7 @@ export default function QuestionBankManagement({ showToast }) {
           search,
           examId: examFilter,
           subjectId: subjectFilter,
+          topicId: topicFilter,
           difficultyLevel: difficultyFilter,
           isPreviousYear: pyqFilter
         }),
@@ -141,15 +178,33 @@ export default function QuestionBankManagement({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, subjectFilter, difficultyFilter, pyqFilter]);
+  }, [pagination.currentPage, search, examFilter, subjectFilter, topicFilter, difficultyFilter, pyqFilter]);
 
   useEffect(() => {
     fetchQuestions();
   }, [fetchQuestions]);
 
-  // Handle Exam change in modal to dynamically cascade subjects
+  // Load topics for modal whenever modal subject changes
+  const handleModalSubjectChange = async (targetSubjectId) => {
+    setFormData(prev => ({ ...prev, subjectId: targetSubjectId, topicId: "" }));
+    if (!targetSubjectId) {
+      setModalTopics([]);
+      return;
+    }
+    try {
+      const res = await syllabusService.getTopics(targetSubjectId);
+      const topicsList = res.data?.topics || res.data || res.topics || [];
+      setModalTopics(topicsList || []);
+    } catch (err) {
+      console.warn("Failed to load modal topics:", err);
+      setModalTopics([]);
+    }
+  };
+
+  // Handle Exam change in modal to dynamically cascade subjects and topics
   const handleModalExamChange = async (targetExamId) => {
-    setFormData(prev => ({ ...prev, examId: targetExamId, subjectId: "" }));
+    setFormData(prev => ({ ...prev, examId: targetExamId, subjectId: "", topicId: "" }));
+    setModalTopics([]);
     if (!targetExamId) {
       setModalSubjects([]);
       return;
@@ -159,11 +214,20 @@ export default function QuestionBankManagement({ showToast }) {
       const subjectsList = subs || [];
       setModalSubjects(subjectsList);
       if (subjectsList.length > 0) {
-        setFormData(prev => ({ ...prev, subjectId: subjectsList[0].id }));
+        const firstSubId = subjectsList[0].id;
+        setFormData(prev => ({ ...prev, subjectId: firstSubId }));
+        // Also fetch topics for this subject
+        try {
+          const tRes = await syllabusService.getTopics(firstSubId);
+          setModalTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+        } catch {
+          setModalTopics([]);
+        }
       }
     } catch (err) {
       console.warn("Failed to load modal subjects:", err);
       setModalSubjects([]);
+      setModalTopics([]);
     }
   };
 
@@ -171,12 +235,13 @@ export default function QuestionBankManagement({ showToast }) {
   const handleOpenCreate = async () => {
     const defaultExamId = (examFilter && examFilter !== "all") ? examFilter : (exams[0]?.id || "");
     const defaultSubjectId = (subjectFilter && subjectFilter !== "all") ? subjectFilter : "";
+    const defaultTopicId = (topicFilter && topicFilter !== "all") ? topicFilter : "";
     setEditingQuestion(null);
     setFormData({
       examId: defaultExamId,
       subjectId: defaultSubjectId,
       stageId: "",
-      topicId: "",
+      topicId: defaultTopicId,
       questionType: "single_choice",
       questionHindi: "",
       questionEnglish: "",
@@ -202,15 +267,24 @@ export default function QuestionBankManagement({ showToast }) {
       try {
         const subs = await examService.getExamSubjects(defaultExamId);
         setModalSubjects(subs || []);
+        let chosenSubId = "";
         if (subs && subs.length > 0) {
           const matchSub = defaultSubjectId ? subs.find(s => String(s.id) === String(defaultSubjectId)) : null;
-          setFormData(prev => ({ ...prev, subjectId: matchSub ? matchSub.id : subs[0].id }));
+          chosenSubId = matchSub ? matchSub.id : subs[0].id;
+          setFormData(prev => ({ ...prev, subjectId: chosenSubId }));
+        }
+        if (chosenSubId) {
+          const tRes = await syllabusService.getTopics(chosenSubId);
+          setModalTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+        } else {
+          setModalTopics([]);
         }
       } catch (err) {
         console.warn("Failed to load subjects:", err);
       }
     } else {
       setModalSubjects([]);
+      setModalTopics([]);
     }
 
     setIsModalOpen(true);
@@ -247,6 +321,18 @@ export default function QuestionBankManagement({ showToast }) {
       } catch (err) {
         console.warn("Failed to load subjects for edit:", err);
       }
+    }
+
+    if (q.subjectId) {
+      try {
+        const tRes = await syllabusService.getTopics(q.subjectId);
+        setModalTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+      } catch (err) {
+        console.warn("Failed to load topics for edit:", err);
+        setModalTopics([]);
+      }
+    } else {
+      setModalTopics([]);
     }
 
     setIsModalOpen(true);
@@ -307,7 +393,11 @@ export default function QuestionBankManagement({ showToast }) {
   // Open Bulk Import / JSON File Upload Modal
   const handleOpenBulkModal = async () => {
     const targetExam = (examFilter && examFilter !== "all") ? examFilter : (exams[0]?.id || "");
+    const targetSub = (subjectFilter && subjectFilter !== "all") ? subjectFilter : "";
+    const targetTopic = (topicFilter && topicFilter !== "all") ? topicFilter : "";
+
     setBulkExamId(targetExam);
+    setBulkTopicId(targetTopic);
     setBulkImportMode("file");
     setSelectedFileName("");
     setSelectedFileSize("");
@@ -320,22 +410,30 @@ export default function QuestionBankManagement({ showToast }) {
       try {
         const subs = await examService.getExamSubjects(targetExam);
         setBulkExamSubjects(subs || []);
+        let chosenSubId = "";
         if (subs && subs.length > 0) {
-          const matchSub = (subjectFilter && subjectFilter !== "all")
-            ? subs.find(s => String(s.id) === String(subjectFilter))
-            : subs[0];
-          setBulkSubjectId(matchSub ? matchSub.id : subs[0].id);
+          const matchSub = targetSub ? subs.find(s => String(s.id) === String(targetSub)) : subs[0];
+          chosenSubId = matchSub ? matchSub.id : subs[0].id;
+          setBulkSubjectId(chosenSubId);
         } else {
           setBulkSubjectId("");
+        }
+        if (chosenSubId) {
+          const tRes = await syllabusService.getTopics(chosenSubId);
+          setBulkTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+        } else {
+          setBulkTopics([]);
         }
       } catch (err) {
         console.warn("Bulk modal subject load error:", err);
         setBulkExamSubjects([]);
         setBulkSubjectId("");
+        setBulkTopics([]);
       }
     } else {
       setBulkExamSubjects([]);
       setBulkSubjectId("");
+      setBulkTopics([]);
     }
 
     setIsBulkModalOpen(true);
@@ -345,6 +443,8 @@ export default function QuestionBankManagement({ showToast }) {
   const handleBulkExamChange = async (targetExamId) => {
     setBulkExamId(targetExamId);
     setBulkSubjectId("");
+    setBulkTopicId("");
+    setBulkTopics([]);
     if (!targetExamId) {
       setBulkExamSubjects([]);
       return;
@@ -353,11 +453,36 @@ export default function QuestionBankManagement({ showToast }) {
       const subs = await examService.getExamSubjects(targetExamId);
       setBulkExamSubjects(subs || []);
       if (subs && subs.length > 0) {
-        setBulkSubjectId(subs[0].id);
+        const firstSubId = subs[0].id;
+        setBulkSubjectId(firstSubId);
+        try {
+          const tRes = await syllabusService.getTopics(firstSubId);
+          setBulkTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+        } catch {
+          setBulkTopics([]);
+        }
       }
     } catch (err) {
       console.warn("Bulk modal exam change error:", err);
       setBulkExamSubjects([]);
+      setBulkTopics([]);
+    }
+  };
+
+  // Cascading Topic Selection when Subject changes in Bulk Modal
+  const handleBulkSubjectChange = async (targetSubjectId) => {
+    setBulkSubjectId(targetSubjectId);
+    setBulkTopicId("");
+    if (!targetSubjectId) {
+      setBulkTopics([]);
+      return;
+    }
+    try {
+      const tRes = await syllabusService.getTopics(targetSubjectId);
+      setBulkTopics(tRes.data?.topics || tRes.data || tRes.topics || []);
+    } catch (err) {
+      console.warn("Bulk modal topic load error:", err);
+      setBulkTopics([]);
     }
   };
 
@@ -481,13 +606,16 @@ export default function QuestionBankManagement({ showToast }) {
 
     try {
       setIsSaving(true);
-      const res = await questionService.bulkImport(parsedBulkQuestions, bulkExamId, bulkSubjectId);
+      const res = await questionService.bulkImport(parsedBulkQuestions, bulkExamId, bulkSubjectId, bulkTopicId);
       showToast?.("success", res.message || `Successfully imported ${parsedBulkQuestions.length} questions into Question Bank! 🎯`);
       setIsBulkModalOpen(false);
 
-      // Divide & switch view directly to this Exam & Subject so user sees results instantly
+      // Divide & switch view directly to this Exam & Subject (& Topic) so user sees results instantly
       setExamFilter(bulkExamId);
       setSubjectFilter(bulkSubjectId);
+      if (bulkTopicId) {
+        setTopicFilter(bulkTopicId);
+      }
       setPagination(prev => ({ ...prev, currentPage: 1 }));
       fetchQuestions();
     } catch (err) {
@@ -717,6 +845,42 @@ export default function QuestionBankManagement({ showToast }) {
             })}
           </div>
         )}
+
+        {/* If a specific subject is chosen and topics exist, display that subject's topic pills */}
+        {subjectFilter !== "all" && filterTopics.length > 0 && (
+          <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <span className="text-[11px] font-bold text-slate-400 uppercase shrink-0">
+              🏷️ Topics:
+            </span>
+            <button
+              onClick={() => setTopicFilter("all")}
+              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition shrink-0 cursor-pointer ${
+                topicFilter === "all"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+              }`}
+            >
+              All Topics
+            </button>
+            {filterTopics.map((top) => {
+              const isTopSelected = String(topicFilter) === String(top.id);
+              return (
+                <button
+                  key={top.id}
+                  onClick={() => setTopicFilter(top.id)}
+                  className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition shrink-0 cursor-pointer flex items-center gap-1 ${
+                    isTopSelected
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-slate-950 text-slate-300 hover:text-white border border-slate-800"
+                  }`}
+                >
+                  <span>🏷️</span>
+                  <span>{top.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* FILTER BAR: Exam -> Subject hierarchy & search */}
@@ -737,7 +901,7 @@ export default function QuestionBankManagement({ showToast }) {
         <select
           value={examFilter}
           onChange={(e) => setExamFilter(e.target.value)}
-          className="w-full md:w-44 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-40 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
           <option value="all">🏛️ All Exams</option>
           {exams.map((ex) => (
@@ -751,7 +915,7 @@ export default function QuestionBankManagement({ showToast }) {
         <select
           value={subjectFilter}
           onChange={(e) => setSubjectFilter(e.target.value)}
-          className="w-full md:w-48 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-44 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
           <option value="all">📚 All Subjects</option>
           {filterSubjects.map((sub) => (
@@ -761,11 +925,28 @@ export default function QuestionBankManagement({ showToast }) {
           ))}
         </select>
 
+        {/* Filter by Topic (dynamically populated when subject is selected) */}
+        <select
+          value={topicFilter}
+          onChange={(e) => setTopicFilter(e.target.value)}
+          disabled={subjectFilter === "all" || filterTopics.length === 0}
+          className="w-full md:w-40 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer disabled:opacity-40"
+        >
+          <option value="all">
+            {subjectFilter === "all" ? "🏷️ Select Subject" : (filterTopics.length === 0 ? "🏷️ No Topics" : "🏷️ All Topics")}
+          </option>
+          {filterTopics.map((top) => (
+            <option key={top.id} value={top.id}>
+              {top.name}
+            </option>
+          ))}
+        </select>
+
         {/* Difficulty Filter */}
         <select
           value={difficultyFilter}
           onChange={(e) => setDifficultyFilter(e.target.value)}
-          className="w-full md:w-32 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
+          className="w-full md:w-28 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none focus:border-emerald-500 cursor-pointer"
         >
           <option value="all">All Levels</option>
           <option value="easy">🟢 Easy</option>
@@ -871,6 +1052,14 @@ export default function QuestionBankManagement({ showToast }) {
                       <span>📚</span>
                       <span>{q.subjectRef?.name || q.subject?.name || "General Subject"}</span>
                     </span>
+
+                    {/* Topic Badge */}
+                    {(q.topic?.name || (typeof q.topic === 'string' && q.topic)) && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-teal-950/60 text-teal-300 border border-teal-800/50 text-[10px] font-bold flex items-center gap-1">
+                        <span>🏷️</span>
+                        <span>{typeof q.topic === 'object' ? q.topic?.name : q.topic}</span>
+                      </span>
+                    )}
 
                     {/* Difficulty Badge */}
                     <span
@@ -1021,8 +1210,8 @@ export default function QuestionBankManagement({ showToast }) {
             </div>
 
             <form onSubmit={handleSaveQuestion} className="space-y-4">
-              {/* Exam & Subject Selectors (Strict Exam -> Subject hierarchy) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+              {/* Exam, Subject, and Topic Selectors (Strict Exam -> Subject -> Topic hierarchy) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800">
                 {/* Exam Dropdown */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
@@ -1052,11 +1241,11 @@ export default function QuestionBankManagement({ showToast }) {
                   <select
                     required
                     value={formData.subjectId}
-                    onChange={(e) => setFormData(prev => ({ ...prev, subjectId: e.target.value }))}
+                    onChange={(e) => handleModalSubjectChange(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="">
-                      {modalSubjects.length === 0 ? "⚠️ No Subjects (Please add in Exam first)" : "Select Subject"}
+                      {modalSubjects.length === 0 ? "⚠️ No Subjects (Add in Exam first)" : "Select Subject"}
                     </option>
                     {modalSubjects.map((sub) => (
                       <option key={sub.id} value={sub.id}>
@@ -1064,6 +1253,65 @@ export default function QuestionBankManagement({ showToast }) {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Topic Dropdown & Custom Topic Creator */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-300 uppercase">
+                      Target Topic
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomTopicMode(!isCustomTopicMode);
+                        if (!isCustomTopicMode) {
+                          setFormData(prev => ({ ...prev, topicId: "" }));
+                        }
+                      }}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                    >
+                      {isCustomTopicMode ? "⬅ Select Existing" : "+ Create Custom"}
+                    </button>
+                  </div>
+
+                  {isCustomTopicMode ? (
+                    <input
+                      type="text"
+                      placeholder="Enter custom topic (e.g. Constituent Assembly)..."
+                      value={formData.customTopicName || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customTopicName: e.target.value, topicId: "" }))}
+                      className="w-full bg-slate-900 border border-emerald-500 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:ring-1 focus:ring-emerald-400 placeholder:text-slate-500"
+                    />
+                  ) : (
+                    <select
+                      value={formData.topicId || ""}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setIsCustomTopicMode(true);
+                          setFormData(prev => ({ ...prev, topicId: "" }));
+                        } else {
+                          setFormData(prev => ({ ...prev, topicId: e.target.value, customTopicName: "" }));
+                        }
+                      }}
+                      disabled={!formData.subjectId}
+                      className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer disabled:opacity-40"
+                    >
+                      <option value="">
+                        {!formData.subjectId ? "-- Choose Subject First --" : (modalTopics.length === 0 ? "-- No Topics Defined --" : "-- Choose Topic (Optional) --")}
+                      </option>
+                      {modalTopics.map((top) => (
+                        <option key={top.id} value={top.id}>
+                          🏷️ {top.name}
+                        </option>
+                      ))}
+                      {formData.subjectId && (
+                        <option value="__custom__" className="text-emerald-400 font-bold">
+                          ➕ + Create Custom Topic...
+                        </option>
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -1256,7 +1504,7 @@ export default function QuestionBankManagement({ showToast }) {
                   <span>Step 1: Select Exam & Subject of Exam (Mandatory Division)</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Select Exam */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
@@ -1280,19 +1528,19 @@ export default function QuestionBankManagement({ showToast }) {
                   {/* Select Subject of Exam */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 uppercase mb-1 flex items-center justify-between">
-                      <span>2. Subject of Exam *</span>
+                      <span>2. Subject *</span>
                       <span className="text-[10px] text-red-400 font-bold uppercase">Required</span>
                     </label>
                     <select
                       required
                       value={bulkSubjectId}
-                      onChange={(e) => setBulkSubjectId(e.target.value)}
+                      onChange={(e) => handleBulkSubjectChange(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer"
                     >
                       <option value="">
                         {bulkExamSubjects.length === 0
                           ? (bulkExamId ? "Loading subjects..." : "Select Exam First")
-                          : "-- Select Subject of Exam --"}
+                          : "-- Select Subject --"}
                       </option>
                       {bulkExamSubjects.map((sub) => (
                         <option key={sub.id} value={sub.id}>
@@ -1300,6 +1548,69 @@ export default function QuestionBankManagement({ showToast }) {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Select Topic (Optional / Custom) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-300 uppercase">
+                        3. Topic
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBulkCustomTopicMode(!isBulkCustomTopicMode);
+                          if (!isBulkCustomTopicMode) {
+                            setBulkTopicId("");
+                          }
+                        }}
+                        className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                      >
+                        {isBulkCustomTopicMode ? "⬅ Select Existing" : "+ Create Custom"}
+                      </button>
+                    </div>
+
+                    {isBulkCustomTopicMode ? (
+                      <input
+                        type="text"
+                        placeholder="e.g. Constituent Assembly"
+                        value={bulkCustomTopicName}
+                        onChange={(e) => {
+                          setBulkCustomTopicName(e.target.value);
+                          setBulkTopicId(e.target.value);
+                        }}
+                        className="w-full bg-slate-900 border border-emerald-500 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:ring-1 focus:ring-emerald-400 placeholder:text-slate-500"
+                      />
+                    ) : (
+                      <select
+                        value={bulkTopicId}
+                        onChange={(e) => {
+                          if (e.target.value === "__custom__") {
+                            setIsBulkCustomTopicMode(true);
+                            setBulkTopicId("");
+                          } else {
+                            setBulkTopicId(e.target.value);
+                            setBulkCustomTopicName("");
+                          }
+                        }}
+                        disabled={!bulkSubjectId}
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-emerald-500 cursor-pointer disabled:opacity-40"
+                      >
+                        <option value="">
+                          {!bulkSubjectId ? "-- Select Subject First --" : (bulkTopics.length === 0 ? "-- No Topics --" : "-- Select Topic (Optional) --")}
+                        </option>
+                        {bulkTopics.map((top) => (
+                          <option key={top.id} value={top.id}>
+                            🏷️ {top.name}
+                          </option>
+                        ))}
+                        {bulkSubjectId && (
+                          <option value="__custom__" className="text-emerald-400 font-bold">
+                            ➕ + Create Custom Topic...
+                          </option>
+                        )}
+                      </select>
+                    )}
                   </div>
                 </div>
 
@@ -1312,6 +1623,12 @@ export default function QuestionBankManagement({ showToast }) {
                       <strong>{exams.find(e => String(e.id) === String(bulkExamId))?.title}</strong>
                       {" ➔ "}
                       <strong>{bulkExamSubjects.find(s => String(s.id) === String(bulkSubjectId))?.name}</strong>
+                      {bulkTopicId && bulkTopics.find(t => String(t.id) === String(bulkTopicId)) && (
+                        <span>
+                          {" ➔ "}
+                          <strong>🏷️ {bulkTopics.find(t => String(t.id) === String(bulkTopicId))?.name}</strong>
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}

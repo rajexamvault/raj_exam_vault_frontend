@@ -77,15 +77,17 @@ export const questionService = {
       body: JSON.stringify(questionData)
     }),
 
-  bulkImport: (questions, defaultExamId, defaultSubjectId) =>
+  bulkImport: (questions, defaultExamId, defaultSubjectId, defaultTopicId) =>
     request("/questions/bulk-import", {
       method: "POST",
       body: JSON.stringify({
         questions,
         defaultExamId,
         defaultSubjectId,
+        defaultTopicId,
         examId: defaultExamId,
-        subjectId: defaultSubjectId
+        subjectId: defaultSubjectId,
+        topicId: defaultTopicId
       })
     }),
 

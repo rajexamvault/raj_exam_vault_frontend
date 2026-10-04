@@ -216,16 +216,21 @@ export default function MockTestsPage() {
                     {test.description || "Official simulation test matching the exact RPSC / RSSB exam blueprint and marking scheme."}
                   </p>
 
-                  {/* Exam / Subject Tags */}
+                  {/* Exam / Subject / Topic Tags */}
                   <div className="flex flex-wrap gap-1.5 mb-4 text-[11px]">
                     {test.exam && (
                       <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
-                        🏛️ {test.exam.name}
+                        🏛️ {test.exam.title || test.exam.name || test.exam.shortName}
                       </span>
                     )}
-                    {test.subject && (
+                    {(test.subjectRef || test.subject) && (
                       <span className="px-2 py-0.5 rounded-md bg-pink-500/10 text-pink-300 border border-pink-500/20 font-medium">
-                        📖 {test.subject.name}
+                        📖 {test.subjectRef?.name || test.subject?.name}
+                      </span>
+                    )}
+                    {test.topic && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
+                        🏷️ {test.topic.name || test.topic}
                       </span>
                     )}
                   </div>
