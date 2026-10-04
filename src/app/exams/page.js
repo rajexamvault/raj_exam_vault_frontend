@@ -60,7 +60,7 @@ export default function ExamsDirectoryPage() {
               Rajasthan Government Exams & Vacancies Directory
             </h1>
             <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-              Explore multi-tier exam stages, official syllabus breakdowns, previous year papers, and free study notes for all RPSC & RSMSSB recruitments.
+              Explore subject-wise syllabus breakdowns, previous year papers, topics, and free study notes for all RPSC & RSMSSB recruitments.
             </p>
 
             {/* Search Box */}

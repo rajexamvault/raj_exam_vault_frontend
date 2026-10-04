@@ -42,8 +42,13 @@ const syllabusService = {
   },
 
   // Subjects
-  async getSubjects(stageId) {
-    const res = await axios.get(`${API_BASE_URL}/syllabus/subjects/${stageId}`);
+  async getExamSubjects(examId) {
+    const res = await axios.get(`${API_BASE_URL}/syllabus/exam-subjects/${examId}`);
+    return res.data;
+  },
+
+  async getSubjects(stageOrExamId) {
+    const res = await axios.get(`${API_BASE_URL}/syllabus/subjects/${stageOrExamId}`);
     return res.data;
   },
 

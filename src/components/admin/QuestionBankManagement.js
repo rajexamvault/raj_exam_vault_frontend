@@ -66,7 +66,6 @@ export default function QuestionBankManagement({ showToast }) {
   const [formData, setFormData] = useState({
     examId: "",
     subjectId: "",
-    stageId: "",
     topicId: "",
     customTopicName: "",
     questionType: "single_choice",
@@ -240,7 +239,6 @@ export default function QuestionBankManagement({ showToast }) {
     setFormData({
       examId: defaultExamId,
       subjectId: defaultSubjectId,
-      stageId: "",
       topicId: defaultTopicId,
       questionType: "single_choice",
       questionHindi: "",
@@ -296,7 +294,6 @@ export default function QuestionBankManagement({ showToast }) {
     setFormData({
       examId: q.examId || "",
       subjectId: q.subjectId || "",
-      stageId: q.stageId || "",
       topicId: q.topicId || "",
       questionType: q.questionType || "single_choice",
       questionHindi: q.questionHindi || "",

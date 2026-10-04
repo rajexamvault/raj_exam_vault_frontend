@@ -459,7 +459,7 @@ export default function SuperAdminDashboard() {
               </span>
             </button>
 
-            {/* Stages & Syllabus Architecture */}
+            {/* Syllabus & Topics Architecture */}
             <button
               onClick={() => handleTabSwitch("syllabus")}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
@@ -470,7 +470,7 @@ export default function SuperAdminDashboard() {
             >
               <div className="flex items-center gap-3">
                 <span className="text-base">📑</span>
-                <span>Stages & Syllabus</span>
+                <span>Syllabus & Topics</span>
               </div>
             </button>
 
@@ -791,7 +791,7 @@ export default function SuperAdminDashboard() {
           />
         )}
 
-        {/* ================= TAB 6: STAGES & SYLLABUS ================= */}
+        {/* ================= TAB 6: SYLLABUS & TOPICS ================= */}
         {activeTab === "syllabus" && (
           <SyllabusHierarchyManagement
             initialExamId={selectedExamForSyllabus?.id}

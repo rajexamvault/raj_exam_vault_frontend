@@ -20,8 +20,8 @@ export default function DynamicExamHubPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("syllabus"); // 'syllabus' | 'materials' | 'tests' | 'overview'
 
-  // Expanded accordion stages in syllabus
-  const [expandedStages, setExpandedStages] = useState({});
+  // Expanded accordion subjects in syllabus
+  const [expandedSubjects, setExpandedSubjects] = useState({});
 
   useEffect(() => {
     const fetchExamData = async () => {
@@ -40,11 +40,17 @@ export default function DynamicExamHubPage({ params }) {
             mockTestService.getAllTests({ examId: examData.id, limit: 10 }).catch(() => ({ data: { mockTests: [] } }))
           ]);
 
-          const treeData = treeRes?.data?.stages ? treeRes.data : (treeRes?.data?.data?.stages ? treeRes.data.data : (treeRes?.data || null));
+          const treeData = treeRes?.data?.subjects
+            ? treeRes.data
+            : (treeRes?.data?.data?.subjects
+              ? treeRes.data.data
+              : (treeRes?.data || null));
+
           if (treeData) {
             setSyllabusTree(treeData);
-            if (treeData.stages && treeData.stages.length > 0) {
-              setExpandedStages({ [treeData.stages[0].id]: true });
+            const subs = treeData.subjects || (Array.isArray(treeData.stages) ? treeData.stages.flatMap(st => st.subjects || []) : []);
+            if (subs.length > 0) {
+              setExpandedSubjects({ [subs[0].id]: true });
             }
           }
           const mats = matRes?.data?.materials || matRes?.materials || (Array.isArray(matRes?.data) ? matRes.data : []);
@@ -62,8 +68,8 @@ export default function DynamicExamHubPage({ params }) {
     if (slug) fetchExamData();
   }, [slug]);
 
-  const toggleStage = (stageId) => {
-    setExpandedStages(prev => ({ ...prev, [stageId]: !prev[stageId] }));
+  const toggleSubject = (subjectId) => {
+    setExpandedSubjects(prev => ({ ...prev, [subjectId]: !prev[subjectId] }));
   };
 
   if (loading) {
@@ -98,7 +104,7 @@ export default function DynamicExamHubPage({ params }) {
     );
   }
 
-  const stages = syllabusTree?.stages || [];
+  const subjects = syllabusTree?.subjects || (Array.isArray(syllabusTree?.stages) ? syllabusTree.stages.flatMap(st => st.subjects || []) : []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -127,7 +133,7 @@ export default function DynamicExamHubPage({ params }) {
                     {exam.title}
                   </h1>
                   <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                    {exam.description || "Comprehensive preparation hub including multi-tier stages, syllabus breakdown, PYQs, and test series."}
+                    {exam.description || "Comprehensive preparation hub including subjects, syllabus breakdown, topics, PYQs, and test series."}
                   </p>
                 </div>
               </div>
@@ -160,8 +166,8 @@ export default function DynamicExamHubPage({ params }) {
             {/* Quick Metrics Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-slate-800/80 text-xs">
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase">Total Stages / Tiers</span>
-                <div className="text-lg font-black text-white mt-0.5">{stages.length} Stages</div>
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">Subjects / Modules</span>
+                <div className="text-lg font-black text-white mt-0.5">{subjects.length} Subjects</div>
               </div>
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
                 <span className="text-[10px] text-slate-400 font-semibold uppercase">Total Vacancies</span>
@@ -190,7 +196,7 @@ export default function DynamicExamHubPage({ params }) {
                   : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
-              📑 Stages & Syllabus Hierarchy ({stages.length})
+              📑 Syllabus & Topics
             </button>
             <button
               onClick={() => setActiveTab("materials")}
@@ -234,14 +240,14 @@ export default function DynamicExamHubPage({ params }) {
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <span>🏛️</span>
-                  <span>Exam Stage & Subject Scheme</span>
+                  <span>Exam Subjects & Syllabus Structure</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Official structure detailing each examination tier, subject distribution, weightage, and units.
+                  Official structure detailing subjects, topic distribution, weightage, and units.
                 </p>
               </div>
 
-              {stages.length === 0 ? (
+              {subjects.length === 0 ? (
                 <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
                   <span className="text-3xl">📋</span>
                   <p className="text-sm font-semibold text-slate-700 mt-2">Syllabus breakdown is being compiled.</p>
@@ -249,91 +255,80 @@ export default function DynamicExamHubPage({ params }) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {stages.map((stage) => {
-                    const isExpanded = expandedStages[stage.id];
-                    const subjects = stage.subjects || [];
+                  {subjects.map((sub, index) => {
+                    const isExpanded = expandedSubjects[sub.id];
+                    const topics = sub.topics || [];
+                    const syllabusItems = sub.syllabusItems || [];
 
                     return (
-                      <div key={stage.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        {/* Stage Header */}
+                      <div key={sub.id || index} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        {/* Subject Header */}
                         <div
-                          onClick={() => toggleStage(stage.id)}
+                          onClick={() => toggleSubject(sub.id)}
                           className="p-4 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between cursor-pointer transition border-b border-slate-100"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="w-7 h-7 rounded-lg bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                              {stage.stageOrder || 1}
+                            <span className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                              {index + 1}
                             </span>
                             <div>
-                              <h3 className="text-base font-bold text-slate-900">{stage.name}</h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-base font-bold text-slate-900">{sub.name}</h3>
+                                {sub.code && (
+                                  <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-mono font-semibold">
+                                    {sub.code}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                                <span>⏱️ {stage.durationMinutes || "180"} Mins</span>
-                                <span>🎯 {stage.totalMarks || 200} Marks</span>
-                                <span>⚠️ Penalty: {stage.negativeMarking || 0.33}</span>
+                                {sub.totalMarks && <span>🎯 {sub.totalMarks} Marks</span>}
+                                <span>📚 {topics.length} Topics</span>
+                                {syllabusItems.length > 0 && <span>📝 {syllabusItems.length} Key Sub-points</span>}
                               </div>
                             </div>
                           </div>
                           <span className="text-slate-400 text-sm font-bold">{isExpanded ? "▲" : "▼"}</span>
                         </div>
 
-                        {/* Stage Subjects */}
+                        {/* Subject Details (Topics & Subpoints) */}
                         {isExpanded && (
-                          <div className="p-4 space-y-4 bg-slate-50/30">
-                            {subjects.length === 0 ? (
-                              <p className="text-xs text-slate-400 italic">No subject modules mapped for this stage yet.</p>
+                          <div className="p-5 space-y-4 bg-white">
+                            {/* Topics Chips */}
+                            {topics.length > 0 ? (
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  Key Chapters & Units ({topics.length}):
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {topics.map((t) => (
+                                    <span key={t.id} className="px-3 py-1.5 rounded-xl bg-slate-50 text-slate-800 text-xs font-medium border border-slate-200 hover:border-slate-300">
+                                      📖 {t.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
                             ) : (
-                              subjects.map((sub) => {
-                                const topics = sub.topics || [];
-                                const syllabusItems = sub.syllabusItems || [];
+                              <p className="text-xs text-slate-400 italic">No topics mapped under this subject yet.</p>
+                            )}
 
-                                return (
-                                  <div key={sub.id} className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <h4 className="text-sm font-bold text-slate-800">{sub.name}</h4>
-                                        {sub.code && (
-                                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-mono font-semibold">
-                                            {sub.code}
-                                          </span>
-                                        )}
+                            {/* Key Syllabus Bullet Items */}
+                            {syllabusItems.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                  Detailed Unit Breakdown:
+                                </span>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {syllabusItems.map((item) => (
+                                    <div key={item.id} className="text-xs text-slate-700 bg-slate-50/70 p-2 rounded-lg border border-slate-100 flex items-start gap-1.5">
+                                      <span className="text-red-500 font-bold">✓</span>
+                                      <div>
+                                        <span className="font-semibold">{item.title}</span>
+                                        {item.description && <p className="text-[11px] text-slate-500 mt-0.5">{item.description}</p>}
                                       </div>
-                                      {sub.totalMarks && (
-                                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                                          {sub.totalMarks} Marks
-                                        </span>
-                                      )}
                                     </div>
-
-                                    {/* Topics Chips */}
-                                    {topics.length > 0 && (
-                                      <div className="space-y-1.5 pt-1">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                          Key Chapters & Units:
-                                        </span>
-                                        <div className="flex flex-wrap gap-2">
-                                          {topics.map((t) => (
-                                            <span key={t.id} className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
-                                              • {t.name}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Key Syllabus Bullet Items */}
-                                    {syllabusItems.length > 0 && (
-                                      <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
-                                        {syllabusItems.map((item) => (
-                                          <div key={item.id} className="text-xs text-slate-600 flex items-start gap-1.5">
-                                            <span className="text-red-500 font-bold">✓</span>
-                                            <span>{item.title}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}

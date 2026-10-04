@@ -17,8 +17,7 @@ const MATERIAL_TYPES = [
 export default function MaterialManagement({ preselectedExam, showToast }) {
   const [materials, setMaterials] = useState([]);
   const [exams, setExams] = useState([]);
-  const [examStages, setExamStages] = useState([]);
-  const [stageSubjects, setStageSubjects] = useState([]);
+  const [examSubjects, setExamSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [examFilter, setExamFilter] = useState(preselectedExam ? String(preselectedExam.id) : "all");
@@ -36,7 +35,6 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
 
   const [formData, setFormData] = useState({
     examId: preselectedExam ? preselectedExam.id : "",
-    stageId: "",
     subjectId: "",
     title: "",
     materialType: "pyq",
@@ -103,38 +101,19 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
     }
   }, [preselectedExam]);
 
-  // Load stages when exam changes in modal
+  // Load subjects when exam changes in modal
   const handleModalExamChange = async (targetExamId) => {
-    setFormData(prev => ({ ...prev, examId: targetExamId, stageId: "", subjectId: "" }));
+    setFormData(prev => ({ ...prev, examId: targetExamId, subjectId: "" }));
     if (!targetExamId) {
-      setExamStages([]);
-      setStageSubjects([]);
+      setExamSubjects([]);
       return;
     }
     try {
-      const res = await syllabusService.getStages(targetExamId);
-      if (res.data) {
-        setExamStages(res.data);
-      }
+      const subs = await examService.getExamSubjects(targetExamId);
+      setExamSubjects(subs || []);
     } catch (err) {
-      console.warn("Failed to load stages for exam:", err);
-    }
-  };
-
-  // Load subjects when stage changes in modal
-  const handleModalStageChange = async (targetStageId) => {
-    setFormData(prev => ({ ...prev, stageId: targetStageId, subjectId: "" }));
-    if (!targetStageId) {
-      setStageSubjects([]);
-      return;
-    }
-    try {
-      const res = await syllabusService.getSubjects(targetStageId);
-      if (res.data) {
-        setStageSubjects(res.data);
-      }
-    } catch (err) {
-      console.warn("Failed to load subjects for stage:", err);
+      console.warn("Failed to load subjects for exam:", err);
+      setExamSubjects([]);
     }
   };
 
@@ -144,7 +123,6 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
     setEditingMaterial(null);
     setFormData({
       examId: defaultExamId,
-      stageId: "",
       subjectId: "",
       title: "",
       materialType: "pyq",
@@ -171,7 +149,6 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
     setEditingMaterial(mat);
     setFormData({
       examId: mat.examId || "",
-      stageId: mat.stageId || "",
       subjectId: mat.subjectId || "",
       title: mat.title || "",
       materialType: mat.materialType || "pyq",
@@ -190,14 +167,10 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
 
     if (mat.examId) {
       try {
-        const res = await syllabusService.getStages(mat.examId);
-        if (res.data) setExamStages(res.data);
-        if (mat.stageId) {
-          const subRes = await syllabusService.getSubjects(mat.stageId);
-          if (subRes.data) setStageSubjects(subRes.data);
-        }
+        const subs = await examService.getExamSubjects(mat.examId);
+        setExamSubjects(subs || []);
       } catch (err) {
-        console.warn("Failed to preload stages/subjects:", err);
+        console.warn("Failed to preload subjects:", err);
       }
     }
 
@@ -547,7 +520,7 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
                   {editingMaterial ? "Edit Study Material / PYQ" : "Upload New Study Material / PYQ"}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Link files directly to any Rajasthan exam and optional stage or subject.
+                  Link files directly to any Rajasthan exam and optional subject.
                 </p>
               </div>
               <button
@@ -559,8 +532,8 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
             </div>
 
             <form onSubmit={handleSaveMaterial} className="space-y-4">
-              {/* Exam & Cascading Stage / Subject Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Exam & Cascading Subject Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Target Exam *</label>
                   <select
@@ -577,20 +550,6 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Exam Stage (Optional)</label>
-                  <select
-                    value={formData.stageId}
-                    onChange={(e) => handleModalStageChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-blue-500"
-                  >
-                    <option value="">All Stages</option>
-                    {examStages.map((st) => (
-                      <option key={st.id} value={st.id}>{st.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Subject (Optional)</label>
                   <select
                     value={formData.subjectId}
@@ -598,7 +557,7 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
                     className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2.5 outline-none focus:border-blue-500"
                   >
                     <option value="">General Subject</option>
-                    {stageSubjects.map((sub) => (
+                    {examSubjects.map((sub) => (
                       <option key={sub.id} value={sub.id}>{sub.name}</option>
                     ))}
                   </select>

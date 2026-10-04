@@ -439,7 +439,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                     type="button"
                     onClick={() => onManageSyllabusForExam?.(exam)}
                     className="px-2.5 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                    title="Manage Stages, Subjects, Topics and Syllabus"
+                    title="Manage Subjects, Topics and Syllabus"
                   >
                     <span>📑 Syllabus</span>
                   </button>
@@ -788,7 +788,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Overview of the exam, stages (Prelims, Mains, Interview), and syllabus highlights..."
+                  placeholder="Overview of the exam, subjects, scheme, and syllabus highlights..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-red-500 resize-none"
