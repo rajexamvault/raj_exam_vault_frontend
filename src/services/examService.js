@@ -58,7 +58,10 @@ export const examService = {
   getAllExams: (params = {}) => {
     const query = new URLSearchParams();
     if (params.limit) query.append("limit", params.limit || "100");
-    return request(`/exams?${query.toString()}`).then(res => ({ exams: res.data?.exams || [] }));
+    return request(`/exams?${query.toString()}`).then(res => ({
+      exams: res.data?.exams || res.exams || [],
+      pagination: res.data?.pagination || res.pagination
+    }));
   },
 
   getExamBySlug: (idOrSlug) => request(`/exams/${idOrSlug}`),

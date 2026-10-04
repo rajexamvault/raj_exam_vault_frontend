@@ -92,7 +92,7 @@ export default function MockTestManagement({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, typeFilter, isFreeFilter, showToast]);
+  }, [pagination.currentPage, search, examFilter, typeFilter, isFreeFilter]);
 
   useEffect(() => {
     fetchMockTests();

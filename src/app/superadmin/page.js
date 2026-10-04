@@ -66,12 +66,12 @@ export default function SuperAdminDashboard() {
   const [toastMessage, setToastMessage] = useState(null);
   const [isBackendOffline, setIsBackendOffline] = useState(false);
 
-  const showToast = (type, message) => {
+  const showToast = useCallback((type, message) => {
     setToastMessage({ type, message });
     setTimeout(() => {
       setToastMessage(null);
     }, 5000);
-  };
+  }, []);
 
   // Fetch KPI Stats
   const fetchStats = useCallback(async () => {

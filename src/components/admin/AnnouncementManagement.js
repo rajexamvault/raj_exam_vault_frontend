@@ -98,7 +98,7 @@ export default function AnnouncementManagement({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, typeFilter, priorityFilter, showToast]);
+  }, [pagination.currentPage, search, examFilter, typeFilter, priorityFilter]);
 
   useEffect(() => {
     fetchAnnouncements();

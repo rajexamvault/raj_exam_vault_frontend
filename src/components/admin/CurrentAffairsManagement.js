@@ -74,7 +74,7 @@ export default function CurrentAffairsManagement({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, categoryFilter, dateFilter, showToast]);
+  }, [pagination.currentPage, search, categoryFilter, dateFilter]);
 
   useEffect(() => {
     fetchArticles();

@@ -87,7 +87,7 @@ export default function MaterialManagement({ preselectedExam, showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, typeFilter, yearFilter, isFreeFilter, showToast]);
+  }, [pagination.currentPage, search, examFilter, typeFilter, yearFilter, isFreeFilter]);
 
   useEffect(() => {
     loadExamsList();

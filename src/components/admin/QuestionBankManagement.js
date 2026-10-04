@@ -105,7 +105,7 @@ export default function QuestionBankManagement({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, examFilter, difficultyFilter, pyqFilter, showToast]);
+  }, [pagination.currentPage, search, examFilter, difficultyFilter, pyqFilter]);
 
   useEffect(() => {
     fetchQuestions();

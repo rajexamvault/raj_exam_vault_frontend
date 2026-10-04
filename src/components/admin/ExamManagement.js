@@ -63,7 +63,7 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
     } finally {
       setLoading(false);
     }
-  }, [pagination.currentPage, search, categoryFilter, statusFilter, showToast]);
+  }, [pagination.currentPage, search, categoryFilter, statusFilter]);
 
   useEffect(() => {
     fetchExams();
