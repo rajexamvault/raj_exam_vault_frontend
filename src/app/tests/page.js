@@ -14,9 +14,6 @@ export default function MockTestsPage() {
   const [selectedType, setSelectedType] = useState("");
   const [selectedAccess, setSelectedAccess] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState("");
-  const [leaderboardModal, setLeaderboardModal] = useState(null);
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -48,23 +45,6 @@ export default function MockTestsPage() {
       console.error("Failed to fetch mock tests:", err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleOpenLeaderboard = async (test) => {
-    setLeaderboardModal(test);
-    setLeaderboardLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/tests/${test.id}/leaderboard`);
-      const json = await res.json();
-      if (json.success || json.status === "success") {
-        const lb = Array.isArray(json.data) ? json.data : (json.leaderboard || json.data?.leaderboard || []);
-        setLeaderboardData(Array.isArray(lb) ? lb : []);
-      }
-    } catch (err) {
-      console.error("Leaderboard error:", err);
-    } finally {
-      setLeaderboardLoading(false);
     }
   };
 
@@ -254,13 +234,10 @@ export default function MockTestsPage() {
 
                 {/* Footer Actions */}
                 <div className="pt-4 border-t border-slate-700/60 flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => handleOpenLeaderboard(test)}
-                    className="text-xs font-semibold text-slate-400 hover:text-purple-400 flex items-center gap-1 transition-colors cursor-pointer"
-                  >
-                    <span>🏆 Rank Board</span>
-                    <span className="text-[10px] text-slate-500">({test.totalAttempts || 0})</span>
-                  </button>
+                  <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                    <span>👥</span>
+                    <span>{test.totalAttempts || 0} Attempts</span>
+                  </div>
 
                   <Link
                     href={`/tests/${test.id}`}
@@ -275,86 +252,6 @@ export default function MockTestsPage() {
           </div>
         )}
       </main>
-
-      {/* Leaderboard Modal */}
-      {leaderboardModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="p-4 sm:p-6 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-                  Aspirant Hall of Fame
-                </span>
-                <h3 className="text-base font-bold text-white line-clamp-1">
-                  {leaderboardModal.title}
-                </h3>
-              </div>
-              <button
-                onClick={() => setLeaderboardModal(null)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto">
-              {leaderboardLoading ? (
-                <div className="py-12 text-center text-slate-400">
-                  <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  <p className="text-xs">Fetching top scores...</p>
-                </div>
-              ) : leaderboardData.length === 0 ? (
-                <div className="py-12 text-center text-slate-500">
-                  <div className="text-4xl mb-2">🏅</div>
-                  <p className="text-xs font-semibold">No student attempts recorded yet. Be the first to top this test!</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-12 gap-2 text-[11px] font-bold text-slate-400 px-3 py-2 uppercase tracking-wider border-b border-slate-800">
-                    <span className="col-span-2">Rank</span>
-                    <span className="col-span-5">Aspirant Name</span>
-                    <span className="col-span-3 text-right">Score</span>
-                    <span className="col-span-2 text-right">Accuracy</span>
-                  </div>
-                  {leaderboardData.map((row) => (
-                    <div
-                      key={row.rank}
-                      className={`grid grid-cols-12 gap-2 items-center px-3 py-2.5 rounded-xl text-xs font-semibold ${
-                        row.rank === 1 ? "bg-amber-500/10 border border-amber-500/30 text-amber-300" :
-                        row.rank === 2 ? "bg-slate-400/10 border border-slate-400/20 text-slate-200" :
-                        row.rank === 3 ? "bg-orange-500/10 border border-orange-500/20 text-orange-300" :
-                        "bg-slate-800/40 text-slate-300"
-                      }`}
-                    >
-                      <div className="col-span-2 flex items-center gap-1.5 font-black">
-                        {row.rank === 1 ? "🥇 #1" : row.rank === 2 ? "🥈 #2" : row.rank === 3 ? "🥉 #3" : `#${row.rank}`}
-                      </div>
-                      <div className="col-span-5 truncate text-white">
-                        {row.userName}
-                      </div>
-                      <div className="col-span-3 text-right font-black text-purple-400">
-                        {row.score} / {row.totalMarks}
-                      </div>
-                      <div className="col-span-2 text-right text-emerald-400 font-bold">
-                        {row.accuracy}%
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-slate-800 flex justify-end bg-slate-800/30">
-              <button
-                onClick={() => setLeaderboardModal(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
