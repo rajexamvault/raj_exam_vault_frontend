@@ -3,9 +3,15 @@
 import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import HeroSection from "@/components/landing/HeroSection";
-import StatsTrustSection from "@/components/landing/StatsTrustSection";
-import MainGridSection from "@/components/landing/MainGridSection";
-import BottomPromoSection from "@/components/landing/BottomPromoSection";
+import ExamVaultsSection from "@/components/landing/ExamVaultsSection";
+import PyqVaultSection from "@/components/landing/PyqVaultSection";
+import TopperNotesSection from "@/components/landing/TopperNotesSection";
+import SyllabusExplorerSection from "@/components/landing/SyllabusExplorerSection";
+import MockTestSection from "@/components/landing/MockTestSection";
+import CurrentAffairsSection from "@/components/landing/CurrentAffairsSection";
+import ValuePillarsSection from "@/components/landing/ValuePillarsSection";
+import FaqSection from "@/components/landing/FaqSection";
+import CtaBannerSection from "@/components/landing/CtaBannerSection";
 import Footer from "@/components/layout/Footer";
 import PreviewModal from "@/components/landing/PreviewModal";
 
@@ -24,21 +30,39 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] text-slate-900 selection:bg-[#d32f2f] selection:text-white relative flex flex-col justify-between">
+    <main className="min-h-screen bg-[#F8FAFC] text-slate-900 selection:bg-[#e62e3d] selection:text-white relative flex flex-col justify-between">
       {/* Top Navbar */}
       <Navbar />
 
       {/* Hero Section */}
       <HeroSection />
 
-      {/* 6-Chip Trust/Feature Bar */}
-      <StatsTrustSection />
+      {/* Destination Exam Vaults (8 Featured Exams) */}
+      <ExamVaultsSection />
 
-      {/* Main 3-Column Grid: Popular Exams, Best Seller PYQs, Free Resources */}
-      <MainGridSection onOpenPreview={handleOpenPreview} />
+      {/* The PYQ Vault Explorer */}
+      <PyqVaultSection onOpenPreview={handleOpenPreview} />
 
-      {/* Bottom Promo & Testimonial Section */}
-      <BottomPromoSection />
+      {/* Topper's Notebook Collection */}
+      <TopperNotesSection onOpenPreview={handleOpenPreview} />
+
+      {/* Interactive Syllabus Explorer */}
+      <SyllabusExplorerSection />
+
+      {/* Mock Test CBT Practice Series */}
+      <MockTestSection />
+
+      {/* Monthly Current Affairs & Magazine Digest */}
+      <CurrentAffairsSection />
+
+      {/* 4 Value Pillars */}
+      <ValuePillarsSection />
+
+      {/* FAQ Accordion */}
+      <FaqSection />
+
+      {/* Bottom CTA Banner */}
+      <CtaBannerSection />
 
       {/* Footer */}
       <Footer />
