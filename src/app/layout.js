@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -19,9 +20,33 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if (typeof window !== 'undefined') {
+                    if (!window.ethereum) {
+                      window.ethereum = { isMetaMask: false, selectedAddress: undefined };
+                    }
+                    window.addEventListener('error', function(event) {
+                      if (event && event.message && (event.message.includes('ethereum') || event.message.includes('selectedAddress'))) {
+                        event.stopImmediatePropagation();
+                        event.preventDefault();
+                      }
+                    }, true);
+                  }
+                } catch (e) {}
+              })();
+            `
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
         <AuthProvider>
           {children}
+          <EmailVerificationModal />
         </AuthProvider>
       </body>
     </html>

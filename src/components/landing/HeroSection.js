@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import examService from "@/services/examService";
 import { 
   SearchIcon, 
   BookOpenIcon, 
@@ -18,15 +19,24 @@ import {
 export default function HeroSection() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [quickExams, setQuickExams] = useState([]);
+  const [loadingExams, setLoadingExams] = useState(true);
 
-  const quickExams = [
-    { name: "RPSC", icon: "🏛️", tag: "RAS / College", slug: "rpsc-ras" },
-    { name: "RSSB / RSMSSB", icon: "📋", tag: "State Board", slug: "rsmssb-patwari" },
-    { name: "REET", icon: "🎓", tag: "Level 1 & 2", slug: "reet-level-2" },
-    { name: "CET", icon: "📝", tag: "12th & Grad", slug: "cet-graduation" },
-    { name: "Police", icon: "👮", tag: "Constable & SI", slug: "raj-police-constable" },
-    { name: "Patwari", icon: "🗺️", tag: "Revenue Dept", slug: "rsmssb-patwari" },
-  ];
+  useEffect(() => {
+    async function loadExams() {
+      try {
+        setLoadingExams(true);
+        const res = await examService.getExams({ limit: 6, status: "active" });
+        const list = res?.data?.exams || res?.exams || (Array.isArray(res?.data) ? res.data : []);
+        setQuickExams(Array.isArray(list) ? list : []);
+      } catch (e) {
+        console.warn("Could not load quick exams in hero:", e);
+      } finally {
+        setLoadingExams(false);
+      }
+    }
+    loadExams();
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -121,21 +131,33 @@ export default function HeroSection() {
               </div>
 
               <div className="space-y-1.5">
-                {quickExams.map((exam, idx) => (
-                  <Link
-                    key={exam.slug ? `${exam.slug}-${idx}` : `${exam.name}-${idx}`}
-                    href={exam.slug ? `/exams/${exam.slug}` : "/exams"}
-                    className="p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 flex items-center justify-between transition-all group/item"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{exam.icon}</span>
-                      <span className="text-xs font-bold text-slate-800 group-hover/item:text-[#0f224a]">
-                        {exam.name}
-                      </span>
-                    </div>
-                    <ChevronRightIcon className="w-3.5 h-3.5 text-slate-400 group-hover/item:text-[#0f224a] transition-transform group-hover/item:translate-x-0.5" />
-                  </Link>
-                ))}
+                {loadingExams ? (
+                  <div className="py-4 text-center text-xs text-slate-400">Loading...</div>
+                ) : quickExams.length === 0 ? (
+                  <div className="py-3 text-center text-[11px] text-slate-400">No exams yet</div>
+                ) : (
+                  quickExams.map((exam, idx) => {
+                    const name = (exam.shortName && exam.shortName.trim().toUpperCase() !== 'EXAM')
+                      ? exam.shortName.trim()
+                      : (exam.title || "Exam");
+
+                    return (
+                      <Link
+                        key={exam.id || idx}
+                        href={`/exams/${exam.slug || exam.id}`}
+                        className="p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 flex items-center justify-between transition-all group/item"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="text-sm shrink-0">{exam.icon || "🏛️"}</span>
+                          <span className="text-xs font-bold text-slate-800 group-hover/item:text-[#0f224a] truncate">
+                            {name}
+                          </span>
+                        </div>
+                        <ChevronRightIcon className="w-3.5 h-3.5 text-slate-400 group-hover/item:text-[#0f224a] transition-transform group-hover/item:translate-x-0.5 shrink-0" />
+                      </Link>
+                    );
+                  })
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-100 text-center">

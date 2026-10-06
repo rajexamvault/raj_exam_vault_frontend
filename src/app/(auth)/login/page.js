@@ -25,7 +25,7 @@ export default function LoginPage() {
   // Auto-redirect if already logged in based on role
   useEffect(() => {
     if (!isAuthLoading && isAuthenticated && user) {
-      if (["superadmin", "admin"].includes(user.role)) {
+      if (["root", "superadmin", "admin"].includes(user.role)) {
         router.push("/superadmin");
       } else {
         router.push("/");
@@ -101,7 +101,7 @@ export default function LoginPage() {
       });
 
       const loggedUser = data.user;
-      const isAdminOrSuperAdmin = loggedUser && ['superadmin', 'admin'].includes(loggedUser.role);
+      const isAdminOrSuperAdmin = loggedUser && ['root', 'superadmin', 'admin'].includes(loggedUser.role);
 
       setServerSuccess(`Welcome back, ${loggedUser?.name || 'User'}! Redirecting to ${isAdminOrSuperAdmin ? 'SuperAdmin Dashboard' : 'portal'}...`);
       
@@ -164,7 +164,7 @@ export default function LoginPage() {
       });
 
       const loggedUser = data.user;
-      const isAdminOrSuperAdmin = loggedUser && ['superadmin', 'admin'].includes(loggedUser.role);
+      const isAdminOrSuperAdmin = loggedUser && ['root', 'superadmin', 'admin'].includes(loggedUser.role);
 
       setServerSuccess("Account verified and logged in! Redirecting...");
       setTimeout(() => {

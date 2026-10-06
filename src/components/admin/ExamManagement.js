@@ -201,11 +201,17 @@ export default function ExamManagement({ onAddMaterialForExam, onManageSyllabusF
 
     setIsSaving(true);
     try {
+      const payload = {
+        ...formData,
+        totalVacancies: formData.totalVacancies !== "" && formData.totalVacancies !== null && !isNaN(Number(formData.totalVacancies)) ? Number(formData.totalVacancies) : 0,
+        slug: formData.slug ? formData.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") : undefined
+      };
+
       if (editingExam) {
-        await examService.updateExam(editingExam.id, formData);
+        await examService.updateExam(editingExam.id, payload);
         showToast?.("success", `Exam "${formData.title}" updated successfully! ✏️`);
       } else {
-        await examService.createExam(formData);
+        await examService.createExam(payload);
         showToast?.("success", `Exam "${formData.title}" created with ${formData.subjects.length} subjects! 🎯`);
       }
       setIsModalOpen(false);

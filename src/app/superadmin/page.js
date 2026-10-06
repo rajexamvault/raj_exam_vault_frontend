@@ -147,7 +147,7 @@ export default function SuperAdminDashboard() {
         router.push("/login");
         return;
       }
-      if (user && !["superadmin", "admin"].includes(user.role)) {
+      if (user && !["root", "superadmin", "admin"].includes(user.role)) {
         router.push("/");
         return;
       }

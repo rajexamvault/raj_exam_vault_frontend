@@ -124,12 +124,22 @@ export default function PreviewModal({ isOpen, onClose, resource }) {
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
             <button
               onClick={() => {
-                alert(`Downloading ${resource.title}... Your PDF is generating!`);
+                if (resource.fileUrl) {
+                  const link = document.createElement("a");
+                  link.href = resource.fileUrl;
+                  link.target = "_blank";
+                  link.download = resource.title || "document";
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                } else {
+                  alert(`Downloading ${resource.title}... Your PDF is generating!`);
+                }
               }}
               className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#e62e3d] via-[#a8226a] to-[#4f46e5] hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-rose-900/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
             >
               <DownloadIcon className="w-4 h-4" />
-              <span>{resource.price ? "Unlock Full Vault" : "Download Free PDF"}</span>
+              <span>{resource.price && Number(resource.price) > 0 ? "Unlock Full Vault" : "Download PDF"}</span>
             </button>
           </div>
         </div>
