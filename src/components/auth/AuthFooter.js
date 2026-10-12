@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 export default function AuthFooter() {
   return (
     <footer className="w-full bg-white border-t border-slate-200 shrink-0 z-20">
@@ -36,7 +38,15 @@ export default function AuthFooter() {
           >
             +91 99295 80615
           </a>
+          <Link
+            href="/report-bug"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold transition-all shadow-xs"
+          >
+            <span>🐞</span>
+            <span>Report Login / Signup Issue</span>
+          </Link>
         </div>
+
 
         {/* Right - Legal */}
         <div className="flex items-center gap-1 text-slate-500 flex-wrap justify-center text-[11px] sm:text-xs">

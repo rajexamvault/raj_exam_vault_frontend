@@ -268,7 +268,18 @@ export default function ForgotPasswordPage() {
               Login
             </Link>
           </p>
+
+          <div className="pt-1 text-center">
+            <Link
+              href="/report-bug"
+              className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-600 transition-colors font-medium"
+            >
+              <span>🐞</span>
+              <span>Not receiving reset OTP? Report a bug with screenshot →</span>
+            </Link>
+          </div>
         </>
+
       )}
 
       {/* Step 2: OTP Verification */}

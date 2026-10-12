@@ -391,7 +391,19 @@ export default function LoginPage() {
 
           {/* Social Login */}
           <SocialLogin />
+
+          {/* Report Issue for Students facing Login problem */}
+          <div className="pt-2 text-center">
+            <Link
+              href="/report-bug"
+              className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-600 transition-colors font-medium"
+            >
+              <span>🐞</span>
+              <span>Facing login, password, or OTP problem? Report a bug with screenshot →</span>
+            </Link>
+          </div>
         </>
+
       ) : (
         /* Account Verification View for Unverified Users */
         <div className="w-full h-full flex flex-col justify-between py-2">

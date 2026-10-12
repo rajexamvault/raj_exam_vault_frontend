@@ -8,6 +8,7 @@ import Footer from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
 import authService from "@/services/authService";
 import PersonalVaultDashboard from "@/components/profile/PersonalVaultDashboard";
+import BugReportDashboard from "@/components/profile/BugReportDashboard";
 
 const EXAM_OPTIONS = [
   "RPSC RAS / RTS",
@@ -60,7 +61,18 @@ export default function ProfilePage() {
   const { user, isAuthenticated, isLoading, updateUserProfile, uploadProfileImage, deleteProfileImage, logout } = useAuth();
   const fileInputRef = useRef(null);
 
-  const [activeTab, setActiveTab] = useState("profile"); // "profile" | "security" | "vault"
+  const [activeTab, setActiveTab] = useState("profile"); // "profile" | "security" | "vault" | "reports"
+
+  // Sync tab with URL query parameter (?tab=reports)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam && ["profile", "security", "vault", "reports", "bugs"].includes(tabParam)) {
+        setActiveTab(tabParam === "bugs" ? "reports" : tabParam);
+      }
+    }
+  }, []);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageNotice, setImageNotice] = useState({ type: "", message: "" });
 
@@ -697,7 +709,20 @@ export default function ProfilePage() {
             </svg>
             <span>My Prep Vault</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("reports")}
+            className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "reports"
+                ? "border-rose-600 text-rose-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <span className="text-sm">🐞</span>
+            <span>Report & Bug Desk</span>
+          </button>
         </div>
+
 
         {/* Tab 1: Personal / Aspirant Details */}
         {activeTab === "profile" && (
@@ -1105,6 +1130,12 @@ export default function ProfilePage() {
         {activeTab === "vault" && (
           <PersonalVaultDashboard />
         )}
+
+        {/* Tab 4: Report & Bug Resolution Desk */}
+        {activeTab === "reports" && (
+          <BugReportDashboard />
+        )}
+
 
       </main>
 

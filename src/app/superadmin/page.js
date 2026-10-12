@@ -12,12 +12,13 @@ import QuestionBankManagement from "@/components/admin/QuestionBankManagement";
 import MockTestManagement from "@/components/admin/MockTestManagement";
 import CurrentAffairsManagement from "@/components/admin/CurrentAffairsManagement";
 import AnnouncementManagement from "@/components/admin/AnnouncementManagement";
+import BugReportManagement from "@/components/admin/BugReportManagement";
 
 export default function SuperAdminDashboard() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const router = useRouter();
 
-  // Active tab: 'overview' | 'admins' | 'users' | 'invites' | 'exams' | 'materials' | 'syllabus' | 'system'
+  // Active tab: 'overview' | 'admins' | 'users' | 'invites' | 'exams' | 'materials' | 'syllabus' | 'system' | 'bugs'
   const [activeTab, setActiveTab] = useState("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedExamForMaterial, setSelectedExamForMaterial] = useState(null);
@@ -33,8 +34,12 @@ export default function SuperAdminDashboard() {
     totalExams: 0,
     totalMaterials: 0,
     totalPyqs: 0,
-    totalNotes: 0
+    totalNotes: 0,
+    totalBugs: 0,
+    pendingBugs: 0,
+    resolvedBugs: 0
   });
+
 
   // Admins state
   const [admins, setAdmins] = useState([]);
@@ -569,6 +574,27 @@ export default function SuperAdminDashboard() {
               </div>
             </button>
 
+            {/* Bug & Issue Reports */}
+            <button
+              onClick={() => handleTabSwitch("bugs")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === "bugs"
+                  ? "bg-linear-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-900/30"
+                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-base">🐛</span>
+                <span>Bug Reports</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === "bugs" ? "bg-white/20 text-white" : "bg-rose-950 text-rose-300 border border-rose-800/50"
+              }`}>
+                {stats.pendingBugs || 0}
+              </span>
+            </button>
+
+
           </nav>
 
           {/* Quick Create Action in Sidebar */}
@@ -678,7 +704,7 @@ export default function SuperAdminDashboard() {
         )}
 
         {/* KPI Metrics Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
           
           <div 
             onClick={() => setActiveTab("exams")}
@@ -774,7 +800,24 @@ export default function SuperAdminDashboard() {
             <div className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">Pending Setup Links</div>
           </div>
 
+          <div 
+            onClick={() => setActiveTab("bugs")}
+            className={`bg-slate-900/60 hover:bg-slate-900 border rounded-2xl p-4 relative overflow-hidden backdrop-blur-md cursor-pointer transition-all ${
+              activeTab === "bugs" ? "border-rose-500 ring-2 ring-rose-500/20" : "border-slate-800"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] sm:text-xs font-bold text-rose-300 uppercase tracking-wider">Bug Reports</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-rose-950/80 text-rose-400 flex items-center justify-center border border-rose-800/40 text-xs sm:text-sm">
+                🐛
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-rose-400 mt-2">{stats.pendingBugs ?? 0}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 font-medium truncate">{stats.totalBugs || 0} Total ({stats.resolvedBugs || 0} Fixed)</div>
+          </div>
+
         </div>
+
 
         {/* ================= TAB 5: EXAMS MANAGEMENT ================= */}
         {activeTab === "exams" && (
@@ -1289,7 +1332,15 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
+        {/* ================= TAB 12: BUG REPORTS & RESOLUTION ================= */}
+        {activeTab === "bugs" && (
+          <div className="animate-fade-in">
+            <BugReportManagement />
+          </div>
+        )}
+
       </main>
+
 
       {/* CREATE ADMIN / SUPERADMIN MODAL */}
       {isCreateModalOpen && (

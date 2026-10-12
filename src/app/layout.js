@@ -2,6 +2,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
+import GlobalBugReportButton from "@/components/common/GlobalBugReportButton";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -47,8 +48,10 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           {children}
           <EmailVerificationModal />
+          <GlobalBugReportButton />
         </AuthProvider>
       </body>
     </html>
   );
 }
+

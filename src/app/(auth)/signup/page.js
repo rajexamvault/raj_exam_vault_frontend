@@ -601,8 +601,20 @@ export default function SignupPage() {
 
           {/* Social Login */}
           <SocialLogin />
+
+          {/* Report Issue for Students facing Registration problem */}
+          <div className="pt-2 text-center">
+            <Link
+              href="/report-bug"
+              className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-rose-600 transition-colors font-medium"
+            >
+              <span>🐞</span>
+              <span>Problem creating account or receiving OTP? Report a bug →</span>
+            </Link>
+          </div>
         </>
       )}
+
 
       {/* STEP 2: OTP Verification Screen */}
       {step === 2 && (
