@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 import GlobalBugReportButton from "@/components/common/GlobalBugReportButton";
+import SessionTracker from "@/components/common/SessionTracker";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -46,6 +47,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-full flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
         <AuthProvider>
+          <SessionTracker />
           {children}
           <EmailVerificationModal />
           <GlobalBugReportButton />

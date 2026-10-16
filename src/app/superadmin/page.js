@@ -594,6 +594,19 @@ export default function SuperAdminDashboard() {
               </span>
             </button>
 
+            {/* System Monitoring — Live Platform Intelligence */}
+            <Link
+              href="/superadmin/monitoring"
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all cursor-pointer text-slate-400 hover:text-slate-100 hover:bg-slate-800/60`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-base">📊</span>
+                <span>System Monitoring</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-900/40 text-violet-300 border border-violet-700/40">
+                Live
+              </span>
+            </Link>
 
           </nav>
 

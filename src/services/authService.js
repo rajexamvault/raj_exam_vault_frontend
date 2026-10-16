@@ -63,11 +63,30 @@ export const authService = {
       body: JSON.stringify({ email })
     }),
 
-  login: ({ email, password }) =>
-    request("/auth/login", {
+  login: async ({ email, password }) => {
+    const data = await request("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password })
-    }),
+    });
+    // Store sessionId for session tracking
+    if (typeof window !== "undefined" && data?.sessionId) {
+      localStorage.setItem("raj_session_id", data.sessionId);
+    }
+    return data;
+  },
+
+  logout: async () => {
+    const sessionId = typeof window !== "undefined" ? localStorage.getItem("raj_session_id") : null;
+    try {
+      await request("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ sessionId })
+      });
+    } catch (_) {}
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("raj_session_id");
+    }
+  },
 
   forgotPassword: ({ email }) =>
     request("/auth/forgot-password", {

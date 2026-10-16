@@ -19,11 +19,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem("raj_auth_user", JSON.stringify(authUser));
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Close server-side session record (fire-and-forget)
+    try { await authService.logout(); } catch (_) {}
     setToken(null);
     setUser(null);
     localStorage.removeItem("raj_auth_token");
     localStorage.removeItem("raj_auth_user");
+    localStorage.removeItem("raj_session_id");
     router.push("/");
   }, [router]);
 
