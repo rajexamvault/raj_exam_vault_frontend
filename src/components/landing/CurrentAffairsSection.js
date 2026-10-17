@@ -87,17 +87,17 @@ export default function CurrentAffairsSection() {
                   </div>
 
                   <h3 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-                    {featured.title}
+                    {featured.titleEnglish || featured.title || featured.titleHindi || "Current Affairs Editorial"}
                   </h3>
-                  {featured.summary && (
+                  {(featured.summaryEnglish || featured.summary || featured.summaryHindi) && (
                     <p className="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-3">
-                      {featured.summary}
+                      {featured.summaryEnglish || featured.summary || featured.summaryHindi}
                     </p>
                   )}
 
-                  {featured.tags && Array.isArray(featured.tags) && featured.tags.length > 0 && (
+                  {((featured.tags && featured.tags.length > 0) || (featured.examRelevance && featured.examRelevance.length > 0)) && (
                     <div className="flex flex-wrap gap-2 mt-5">
-                      {featured.tags.slice(0, 4).map((tag, tIdx) => (
+                      {(featured.tags || featured.examRelevance).slice(0, 4).map((tag, tIdx) => (
                         <span key={tIdx} className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-100 text-[11px] font-semibold text-slate-600">
                           #{tag}
                         </span>
@@ -132,10 +132,10 @@ export default function CurrentAffairsSection() {
                   >
                     <div className="space-y-1">
                       <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                        {item.title}
+                        {item.titleEnglish || item.title || item.titleHindi}
                       </h4>
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                        <span className="text-indigo-600 font-bold">{item.category || "General"}</span>
+                        <span className="text-indigo-600 font-bold">{item.category?.replace(/_/g, " ") || "General"}</span>
                         <span>•</span>
                         <span>{item.date ? new Date(item.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }) : "Recent"}</span>
                       </div>
